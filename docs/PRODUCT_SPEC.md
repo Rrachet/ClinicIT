@@ -74,7 +74,20 @@ Appointment status:
 
 ## Future operational intelligence
 
-- Wait-time prediction
+- Wait-time prediction (built in Phase 8, [AI.md](AI.md))
 - No-show risk prediction
-- Queue/load analytics
+- Queue/load analytics (built in Phase 7, [ANALYTICS.md](ANALYTICS.md))
 - Schedule optimization suggestions
+
+## Status against this spec
+
+This document is the original specification. Everything in the MVP workflow is built. These parts of it are not
+built yet:
+
+- **Rescheduling:** an appointment can be cancelled and rebooked, but not moved.
+- **Doctor schedules and working hours:** doctors have profiles but no schedule. This is also why analytics'
+  utilization is a proxy.
+- **Clinic settings screens:** staff and doctors are created through the admin API, not a screen.
+- **Consultation notes:** the consultation's start and end are recorded, but no clinical content.
+- **No-show risk prediction and schedule optimization.**
+

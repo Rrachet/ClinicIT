@@ -1,7 +1,7 @@
-# ClinicIT API Roadmap
+# ClinicIT API
 
-All endpoints except `POST /api/v1/auth/login` and `GET /api/v1/health` require
-`Authorization: Bearer <token>`. The clinic is always the caller's; requests never carry a
+All endpoints except `POST /api/v1/auth/login`, `GET /api/v1/health` and
+`GET /api/v1/public/queue-status/{code}` require `Authorization: Bearer <token>`. The clinic is always the caller's; requests never carry a
 `clinicId`. Roles per endpoint and error codes: [SECURITY.md](SECURITY.md).
 
 ## Auth and staff
@@ -35,8 +35,7 @@ All endpoints except `POST /api/v1/auth/login` and `GET /api/v1/health` require
 
 ## Queue
 
-Implemented in Phase 2. See [QUEUE_ENGINE.md](QUEUE_ENGINE.md) for semantics, error codes and the reasons
-for the changes from the original sketch.
+See [QUEUE_ENGINE.md](QUEUE_ENGINE.md) for semantics and error codes.
 
 - POST /api/v1/queue-entries            (body: appointmentId) join the queue, issue token
 - GET  /api/v1/queue-entries/{id}
@@ -47,12 +46,6 @@ for the changes from the original sketch.
 - POST /api/v1/queue-entries/{id}/no-show
 - POST /api/v1/queues/call-next         (body: doctorId; optional for doctors)
 - GET  /api/v1/queues/today?doctorId=     (optional for doctors)
-
-## Patient status
-
-- GET /api/v1/patient-status/{publicToken}
-
-Patient status endpoints must use non-guessable public tokens and must not expose unnecessary patient information.
 
 Appointment responses include `patientName`. Queue entry and board rows include `version`
 (same as `entryVersion` in real-time events) and `statusCode` (the patient's status-link code).
@@ -91,7 +84,8 @@ while the patient is waiting (null otherwise).
 ## Patient status (public, no login)
 
 - GET  /api/v1/public/queue-status/{code}   token, current token, patients ahead, status,
-                                            clinic and doctor display name. No patient data.
+                                            clinic and doctor display name, and the estimated
+                                            wait range while waiting. No patient data.
                                             404 for unknown codes and after the queue day.
 
 ## Real-time (WebSocket)
@@ -106,5 +100,3 @@ Full contract, ordering rules and security: [REALTIME.md](REALTIME.md).
 Event types: PATIENT_JOINED_QUEUE, PATIENT_CALLED, PATIENT_STARTED_CONSULTATION,
 PATIENT_COMPLETED, PATIENT_SKIPPED, PATIENT_REQUEUED, PATIENT_NO_SHOW. Events carry ids and
 queue state only (no patient data); load `GET /api/v1/queues/today` on connect/reconnect.
-
-Future: `notification.created` (Phase 6).

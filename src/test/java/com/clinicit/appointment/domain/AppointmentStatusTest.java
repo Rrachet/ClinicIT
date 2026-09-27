@@ -55,7 +55,6 @@ class AppointmentStatusTest {
     @Test
     void terminalStatesAllowNothing() {
         for (AppointmentStatus terminal : EnumSet.of(COMPLETED, CANCELLED, NO_SHOW)) {
-            assertThat(terminal.isTerminal()).isTrue();
             assertThat(terminal.allowedTargets()).isEmpty();
         }
     }

@@ -6,64 +6,65 @@ A clinic operations platform for small clinics.
 
 ClinicIT manages the workflow from patient registration and appointment booking through queue management, doctor consultation, and patient notifications.
 
-## Planned stack
+## Stack
 
-- Java 21
-- Spring Boot
-- Spring Data JPA / Hibernate
-- Spring Security
-- PostgreSQL
-- Redis
-- WebSockets
-- React / Next.js frontend
-- Python ML service for later AI features
-- Docker
+- **Backend:** Java 21, Spring Boot 3.5 (Web, Data JPA/Hibernate, Security, WebSocket/STOMP), a modular
+  monolith. PostgreSQL 16 with Flyway migrations.
+- **Frontend:** Next.js 16 / React 19 (`frontend/`).
+- **ML:** a Python 3.11 FastAPI service with scikit-learn for wait-time estimates (`ml/`). It is optional; without
+  it ClinicIT uses a deterministic estimate.
+- **Tests:** JUnit 5 against real PostgreSQL, pytest, Vitest and Testing Library, and Playwright end to end.
 
-## Development phases
+There is no Redis, message broker or second database. PostgreSQL is the only store.
 
-1. Product and domain design
-2. Spring Boot backend foundation
-3. Authentication and roles
-4. Appointment engine
-5. Queue engine
-6. Real-time updates
-7. Patient experience and notifications
-8. Analytics
-9. AI-assisted operational intelligence
-10. Testing, security, deployment, and production hardening
+## What's built
+
+| Phase | | Docs |
+|---|---|---|
+| 0 | Foundation and architecture | [Architecture](docs/ARCHITECTURE.md), [Product spec](docs/PRODUCT_SPEC.md) |
+| 1 | Patients and appointments | [Data model](docs/DATA_MODEL.md), [API](docs/API.md) |
+| 2 | Queue engine: tokens, call next, concurrency | [Queue engine](docs/QUEUE_ENGINE.md) |
+| 3 | Authentication, roles, clinic isolation, security hardening | [Security](docs/SECURITY.md) |
+| 4 | Real-time queue over authenticated WebSockets | [Real-time](docs/REALTIME.md) |
+| 5 | Frontend: reception, doctor and patient-status screens | [Frontend](docs/FRONTEND.md) |
+| 6 | Patient notifications (provider-agnostic outbox) | [Notifications](docs/NOTIFICATIONS.md) |
+| 7 | Immutable operational history and analytics dashboard | [Analytics](docs/ANALYTICS.md) |
+| 8 | AI wait-time prediction (advisory, operational only) | [AI](docs/AI.md), [`ml/`](ml/README.md) |
 
 ## Core roles
 
-- Clinic Admin
+- Clinic Admin (everything reception can do, plus staff, doctors and analytics)
 - Receptionist
-- Doctor
-- Patient
+- Doctor (own appointments and queue only)
+- Patient (no account: follows their place in the queue through a private status link)
 
 ## Core appointment lifecycle
 
 BOOKED -> CONFIRMED -> ARRIVED -> WAITING -> CALLED -> IN_CONSULTATION -> COMPLETED
 
-Alternative terminal paths include CANCELLED, NO_SHOW, and SKIPPED.
+Other paths: BOOKED/CONFIRMED → CANCELLED; CONFIRMED/ARRIVED → NO_SHOW; WAITING/CALLED → SKIPPED, then back to
+WAITING or on to NO_SHOW. COMPLETED, CANCELLED and NO_SHOW are final. See [docs/QUEUE_ENGINE.md](docs/QUEUE_ENGINE.md).
 
 ## Running tests
 
 ```bash
-mvn test                          # backend
-cd frontend && npm test           # frontend unit/component tests
-```
-
-Queue tests need real PostgreSQL (they rely on row locks, `SKIP LOCKED` and `ON CONFLICT`). They use
-Testcontainers when Docker is available, or an existing database:
-
-```bash
+# Backend: needs real PostgreSQL (row locks, SKIP LOCKED, ON CONFLICT, triggers)
 CLINICIT_TEST_DB_URL=jdbc:postgresql://localhost:5432/clinicit_test mvn test
+
+# ML service
+cd ml && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt && .venv/bin/python -m pytest
+
+# Frontend
+cd frontend && npm ci && npm test && npm run typecheck && npm run lint && npm run build
 ```
 
-With neither available they are reported as skipped.
+The backend tests use the database in `CLINICIT_TEST_DB_URL` (its name must contain `test`, because every table
+is truncated). Without it they use Testcontainers when Docker is available. With neither, they are reported as
+skipped.
 
 ## Running the full stack locally
 
-Requirements: Java 21, Maven, Node 20.9+ and PostgreSQL.
+Requirements: Java 21, Maven, Node 20.9+, PostgreSQL, and Python 3.11+ for the optional ML service.
 
 **1. API** (http://localhost:8080). PostgreSQL at `localhost:5432/clinicit` by default; override with `DB_URL`,
 `DB_USERNAME` and `DB_PASSWORD`. On an empty database the first clinic and admin are created from the
@@ -78,7 +79,17 @@ CLINICIT_BOOTSTRAP_ADMIN_PASSWORD='choose-a-long-password' \
 mvn spring-boot:run
 ```
 
-**2. Staff.** Sign in as the admin through the API, then create doctors and staff:
+**2. Wait-time model (optional).** Without it, estimates come from the deterministic baseline.
+
+```bash
+cd ml && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m clinicit_ml.train --data data/synthetic_wait_times.csv.gz --out models/current
+CLINICIT_MODEL_DIR=models/current .venv/bin/uvicorn clinicit_ml.api:create_default_app --factory --port 8000
+```
+
+Then start the API with `CLINICIT_ML_BASE_URL=http://localhost:8000`.
+
+**3. Staff.** Sign in as the admin through the API, then create doctors and staff:
 
 ```bash
 TOKEN=$(curl -s localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
@@ -90,17 +101,19 @@ curl -s localhost:8080/api/v1/users -H "Authorization: Bearer $TOKEN" -H 'Conten
 # A doctor login: role DOCTOR plus "doctorProfileId" from the doctor you created.
 ```
 
-**3. Frontend** (http://localhost:3000):
+**4. Frontend** (http://localhost:3000):
 
 ```bash
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-Sign in as the receptionist (reception console) or the doctor (doctor console). Patients are messaged their queue
+Sign in as the receptionist (reception console), the doctor (doctor console) or the admin (reception, plus the
+Analytics dashboard). Patients are messaged their queue
 status link automatically when they check in; they don't need an account. By default the development notification
 provider records messages instead of sending them (see [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)).
 
-**4. Everything end to end** in a real browser, against a real database:
+**5. Everything end to end** in a real browser, against a real database. The script builds and starts the ML
+service, the API and the frontend, and seeds its own staff:
 
 ```bash
 DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PASSWORD=secret scripts/e2e.sh
@@ -120,4 +133,6 @@ DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PAS
 - [Operational analytics](docs/ANALYTICS.md)
 - [AI: wait-time prediction](docs/AI.md) (the ML service is in [`ml/`](ml/README.md))
 
-> ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.
+> ClinicIT is an operational system. Its one AI feature estimates waiting time from the state of the queue. It is
+> advisory and never diagnoses, prescribes, prioritises patients or makes clinical decisions (see
+> [docs/AI.md](docs/AI.md)).
