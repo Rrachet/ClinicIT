@@ -16,11 +16,15 @@ reports = sorted(Path(sys.argv[1] if len(sys.argv) > 1 else "target/surefire-rep
 totals = {"tests": 0, "failures": 0, "errors": 0, "skipped": 0}
 skipped = []
 for report in reports:
-    suite = ET.parse(report).getroot()
-    for key in totals:
-        totals[key] += int(suite.get(key, 0))
-    for case in suite.iter("testcase"):
+    # Count test cases, not suite attributes: nested test classes are reported inside their outer class.
+    for case in ET.parse(report).getroot().iter("testcase"):
+        totals["tests"] += 1
+        if case.find("failure") is not None:
+            totals["failures"] += 1
+        if case.find("error") is not None:
+            totals["errors"] += 1
         if case.find("skipped") is not None:
+            totals["skipped"] += 1
             skipped.append(f"{case.get('classname')}.{case.get('name')}")
 
 print(f"{len(reports)} test classes: {totals}")

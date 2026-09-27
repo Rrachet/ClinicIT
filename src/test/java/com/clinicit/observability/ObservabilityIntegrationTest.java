@@ -26,6 +26,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Probes, Prometheus metrics, request ids: the production observability baseline. */
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 class ObservabilityIntegrationTest extends PostgresIntegrationTest {
 
     @LocalManagementPort int managementPort;
@@ -125,6 +126,22 @@ class ObservabilityIntegrationTest extends PostgresIntegrationTest {
         queue.join(desk, arrivedAppointment(doctor, patient(clinic, "A")).getId()); // "you're checked in"
 
         assertThat(count("clinicit.notifications.deliveries", "outcome", "sent", "channel", "SMS")).isEqualTo(sent + 1);
+    }
+
+    @Test
+    void theRequestIdIsOnTheLogLinesTheRequestProduces(org.springframework.boot.test.system.CapturedOutput output)
+            throws Exception {
+        queue.join(desk, arrivedAppointment(doctor, patient(clinic, "A")).getId());
+        String admin = login(staff(clinic, com.clinicit.identity.domain.Role.ADMIN, null, "admin@city.test"));
+
+        // The fake ML service answers 503, so this request logs a fallback warning.
+        mvc.perform(get("/api/v1/queues/today/wait-estimates").param("doctorId", doctor.getId().toString())
+                        .header("X-Request-Id", "trace-abc-12345").with(bearer(admin)))
+                .andExpect(status().isOk());
+
+        assertThat(output.getAll().lines().filter(line -> line.contains("Wait-time model unavailable")))
+                .isNotEmpty()
+                .allSatisfy(line -> assertThat(line).contains("[trace-abc-12345]"));
     }
 
     @Test
