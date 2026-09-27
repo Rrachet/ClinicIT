@@ -5,6 +5,7 @@ import { ApiError } from "@/api/client";
 import type { PublicQueueStatus } from "@/api/types";
 import { useAuth } from "@/auth/AuthProvider";
 import { Spinner } from "@/ui/Spinner";
+import { minuteRange } from "@/queue/waitEstimate";
 import { statusMessage } from "./statusMessage";
 
 const POLL_MS = 15_000;
@@ -105,7 +106,18 @@ export function PatientStatus({ code, pollMs = POLL_MS }: { code: string; pollMs
               <dd>{status.patientsAhead}</dd>
             </div>
           ) : null}
+          {status.status === "WAITING" && status.estimatedWait ? (
+            <div>
+              <dt>Estimated wait</dt>
+              <dd data-testid="patient-estimate">
+                {minuteRange(status.estimatedWait.lowerBoundMinutes, status.estimatedWait.upperBoundMinutes)}
+              </dd>
+            </div>
+          ) : null}
         </dl>
+        {status.status === "WAITING" && status.estimatedWait ? (
+          <p className="muted small">An estimate that changes as the queue moves, not an appointment time.</p>
+        ) : null}
         <p className="muted small">
           {state === "offline" ? "Connection lost — retrying. " : ""}
           {updatedAt ? `Updated ${updatedAt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : ""}

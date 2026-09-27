@@ -140,6 +140,8 @@ export interface PublicQueueStatus {
   status: QueueStatus;
   currentToken: number | null;
   patientsAhead: number;
+  /** Approximate wait before being called, while WAITING (Phase 8). A range, never a promise. */
+  estimatedWait: { estimatedWaitMinutes: number; lowerBoundMinutes: number; upperBoundMinutes: number } | null;
 }
 
 export interface ApiErrorBody {
@@ -223,4 +225,24 @@ export interface QueueAnalytics {
   doctorId: string | null;
   currentQueueLength: number;
   byHour: { hour: number; joined: number; completed: number; queueLength: number }[];
+}
+
+// Wait-time estimates (Phase 8). Advisory only; they never change the order patients are called in.
+
+export interface WaitEstimate {
+  queueEntryId: string;
+  tokenNumber: number;
+  estimatedWaitMinutes: number;
+  lowerBoundMinutes: number;
+  upperBoundMinutes: number;
+  /** MODEL: the ML service; BASELINE: patients ahead × average consultation (fallback). */
+  source: "MODEL" | "BASELINE";
+  modelVersion: string;
+  fallbackReason: string | null;
+}
+
+export interface WaitEstimates {
+  doctorId: string;
+  queueDate: string;
+  entries: WaitEstimate[];
 }
