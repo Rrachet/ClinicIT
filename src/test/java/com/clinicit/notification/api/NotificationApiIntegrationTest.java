@@ -76,7 +76,9 @@ class NotificationApiIntegrationTest extends PostgresIntegrationTest {
         provider.reset();
 
         mvc.perform(post("/api/v1/notifications/{id}/retry", notificationA).with(bearer(deskA)))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                // The response describes the retried message: queued again, with a fresh set of attempts.
+                .andExpect(jsonPath("$.status").value("PENDING"));
 
         assertThat(jdbc.queryForObject("select status from notifications", String.class)).isEqualTo("SENT");
         assertThat(provider.delivered()).hasSize(1);
