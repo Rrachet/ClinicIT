@@ -1,5 +1,6 @@
 package com.clinicit.patient.application;
 
+import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.patient.api.PatientRequest;
 import com.clinicit.patient.api.PatientResponse;
 import com.clinicit.patient.domain.Patient;
@@ -34,7 +35,7 @@ public class PatientService {
     public PatientResponse get(UUID id) {
         return repository.findById(id)
                 .map(PatientResponse::from)
-                .orElseThrow(() -> new IllegalArgumentException("Patient not found"));
+                .orElseThrow(() -> new NotFoundException("Patient not found"));
     }
 
     @Transactional(readOnly = true)
