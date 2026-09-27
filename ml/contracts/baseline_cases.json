@@ -1,0 +1,23 @@
+{
+  "description": "Shared test vectors for the deterministic baseline. Checked by BaselineWaitTimeTest (Java) and tests/test_baseline.py (Python) so both implementations stay identical.",
+  "cases": [
+    {"name": "today's recent consultations win",
+     "features": {"patientsAhead": 3, "recentConsultationMinutes": 12.0, "historicalConsultationMinutes": 9.0},
+     "expected": {"minutes": 36.0, "estimate": 36, "lower": 18, "upper": 59}},
+    {"name": "no consultations yet today: the doctor's history",
+     "features": {"patientsAhead": 2, "recentConsultationMinutes": null, "historicalConsultationMinutes": 7.5},
+     "expected": {"minutes": 15.0, "estimate": 15, "lower": 7, "upper": 28}},
+    {"name": "no history at all: the default consultation length",
+     "features": {"patientsAhead": 4, "recentConsultationMinutes": null, "historicalConsultationMinutes": null},
+     "expected": {"minutes": 40.0, "estimate": 40, "lower": 20, "upper": 65}},
+    {"name": "next in line",
+     "features": {"patientsAhead": 0, "recentConsultationMinutes": 11.0, "historicalConsultationMinutes": 9.0},
+     "expected": {"minutes": 0.0, "estimate": 0, "lower": 0, "upper": 5}},
+    {"name": "fractional minutes",
+     "features": {"patientsAhead": 1, "recentConsultationMinutes": 7.3, "historicalConsultationMinutes": null},
+     "expected": {"minutes": 7.3, "estimate": 7, "lower": 3, "upper": 16}},
+    {"name": "halves round up (not to even)",
+     "features": {"patientsAhead": 1, "recentConsultationMinutes": 12.5, "historicalConsultationMinutes": null},
+     "expected": {"minutes": 12.5, "estimate": 13, "lower": 6, "upper": 24}}
+  ]
+}

@@ -28,7 +28,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PublicQueueStatusIntegrationTest extends PostgresIntegrationTest {
 
     private static final Set<String> FIELDS = Set.of(
-            "clinicName", "doctorName", "queueDate", "tokenNumber", "status", "currentToken", "patientsAhead");
+            "clinicName", "doctorName", "queueDate", "tokenNumber", "status", "currentToken", "patientsAhead",
+            // Phase 8: an approximate range only (no model details, nothing about the patient).
+            "estimatedWait");
 
     @Autowired MockMvc mvc;
     @Autowired QueueService queue;
@@ -75,6 +77,9 @@ class PublicQueueStatusIntegrationTest extends PostgresIntegrationTest {
         Set<String> fields = new HashSet<>();
         body.fieldNames().forEachRemaining(fields::add);
         assertThat(fields).isEqualTo(FIELDS);
+        Set<String> estimateFields = new HashSet<>();
+        body.get("estimatedWait").fieldNames().forEachRemaining(estimateFields::add);
+        assertThat(estimateFields).containsExactlyInAnyOrder("estimatedWaitMinutes", "lowerBoundMinutes", "upperBoundMinutes");
         assertThat(body.toString())
                 .doesNotContain("Private Person")
                 .doesNotContain(me.getPhone())

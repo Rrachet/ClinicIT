@@ -1,0 +1,36 @@
+{
+  "description": "Example schema-1 request, exactly as the Spring Boot HttpWaitTimeModelClient sends it. Checked by WaitTimeModelContractTest (Java: same fields) and tests/test_api.py (Python: accepted).",
+  "request": {
+    "schemaVersion": "1",
+    "instances": [
+      {
+        "dayOfWeek": 2,
+        "minuteOfDay": 605.0,
+        "patientsAhead": 2,
+        "queueLength": 3,
+        "completedToday": 4,
+        "doctorBusy": 1,
+        "activePatientMinutes": 5.0,
+        "callsLastHour": 3,
+        "recentConsultationMinutes": 11.5,
+        "historicalConsultationMinutes": 10.2,
+        "historicalConsultationCount": 140,
+        "historicalWaitMinutes": 24.0
+      },
+      {
+        "dayOfWeek": 2,
+        "minuteOfDay": 605.0,
+        "patientsAhead": 0,
+        "queueLength": 3,
+        "completedToday": 0,
+        "doctorBusy": 0,
+        "activePatientMinutes": 0.0,
+        "callsLastHour": 0,
+        "recentConsultationMinutes": null,
+        "historicalConsultationMinutes": null,
+        "historicalConsultationCount": 0,
+        "historicalWaitMinutes": null
+      }
+    ]
+  }
+}

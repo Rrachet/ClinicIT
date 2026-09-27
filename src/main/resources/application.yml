@@ -40,6 +40,12 @@ clinicit:
     retry-max-delay: PT30M
     poll-interval: PT10S
     retention: P30D
+  prediction:
+    # Python wait-time model service (ml/). Empty: estimates come from the deterministic baseline.
+    ml-base-url: ${CLINICIT_ML_BASE_URL:}
+    timeout: ${CLINICIT_ML_TIMEOUT:PT0.8S}
+    failure-backoff: PT30S
+    cache-ttl: PT60S
   cors:
     # Comma-separated exact origins of the web frontend, e.g. https://app.example.com
     allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS:}

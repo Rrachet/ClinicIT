@@ -14,6 +14,7 @@ import com.clinicit.identity.domain.UserAccount;
 import com.clinicit.identity.domain.UserAccountRepository;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
+import com.clinicit.prediction.application.WaitTimePredictionService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -67,6 +68,9 @@ public abstract class PostgresIntegrationTest {
         // Deliver notifications inline after commit so tests can assert on them directly.
         registry.add("clinicit.notifications.async-delivery", () -> "false");
         registry.add("clinicit.notifications.status-link-base-url", () -> FRONTEND_ORIGIN);
+        // A fake ML service that each test can script; it answers 503 unless told otherwise.
+        registry.add("clinicit.prediction.ml-base-url", () -> FakeModelServer.get().baseUrl());
+        registry.add("clinicit.prediction.timeout", () -> "PT0.3S");
     }
 
     @TestConfiguration
@@ -90,9 +94,13 @@ public abstract class PostgresIntegrationTest {
     @Autowired protected AuthService authService;
     @Autowired protected PasswordEncoder passwordEncoder;
 
+    @Autowired protected WaitTimePredictionService waitTimePredictions;
+
     @BeforeEach
     void resetDatabase() {
         clock.set(NOW);
+        FakeModelServer.get().respond(body -> FakeModelServer.Reply.error(503));
+        waitTimePredictions.reset();
         jdbc.execute("""
                 truncate table operational_events, notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
