@@ -68,7 +68,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(InvalidRequestException.class)
     ResponseEntity<Object> handleInvalidRequest(InvalidRequestException ex, HttpServletRequest request) {
-        return body(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request.getRequestURI());
+        return body(HttpStatus.BAD_REQUEST, ex.getCode(), ex.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(AuthenticationFailedException.class)

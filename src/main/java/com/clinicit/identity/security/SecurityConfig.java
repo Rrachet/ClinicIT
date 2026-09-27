@@ -15,9 +15,13 @@ import org.springframework.security.crypto.factory.PasswordEncoderFactories;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.server.resource.introspection.OpaqueTokenIntrospector;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.method.support.HandlerMethodArgumentResolver;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -30,15 +34,17 @@ import java.util.List;
  */
 @Configuration
 @EnableMethodSecurity
-@EnableConfigurationProperties({AuthProperties.class, BootstrapAdmin.Properties.class})
+@EnableConfigurationProperties({AuthProperties.class, BootstrapAdmin.Properties.class, CorsProperties.class})
 public class SecurityConfig implements WebMvcConfigurer {
 
     @Bean
-    SecurityFilterChain apiSecurity(HttpSecurity http, OpaqueTokenIntrospector introspector, ObjectMapper json)
-            throws Exception {
+    SecurityFilterChain apiSecurity(
+            HttpSecurity http, OpaqueTokenIntrospector introspector, ObjectMapper json, CorsProperties cors
+    ) throws Exception {
         ApiErrorSecurityHandlers errors = new ApiErrorSecurityHandlers(json);
 
         http
+                .cors(c -> c.configurationSource(corsSource(cors)))
                 // Stateless bearer tokens in a header, no cookies: CSRF does not apply.
                 .csrf(AbstractHttpConfigurer::disable)
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
@@ -60,6 +66,27 @@ public class SecurityConfig implements WebMvcConfigurer {
                         .accessDeniedHandler(errors));
 
         return http.build();
+    }
+
+    /**
+     * Bearer tokens travel in the Authorization header, never in cookies, so credentials
+     * mode is off: the browser has nothing ambient to send, and wildcard origins are
+     * refused anyway (see {@link CorsProperties}).
+     */
+    static CorsConfigurationSource corsSource(CorsProperties cors) {
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        if (cors.allowedOrigins().isEmpty()) {
+            return source; // no mappings: no CORS headers, browsers block cross-origin calls
+        }
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(cors.allowedOrigins());
+        config.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setExposedHeaders(List.of("WWW-Authenticate"));
+        config.setAllowCredentials(false);
+        config.setMaxAge(Duration.ofHours(1));
+        source.registerCorsConfiguration("/api/**", config);
+        return source;
     }
 
     /** bcrypt today, stored with an {id} prefix so the algorithm can be upgraded later. */

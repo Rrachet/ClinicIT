@@ -25,7 +25,7 @@ class BootstrapAdminIntegrationTest extends PostgresIntegrationTest {
         var admin = users.findByEmail("owner@first.test").orElseThrow();
         assertThat(admin.getRole()).isEqualTo(Role.ADMIN);
         assertThat(clinics.findById(admin.getClinicId()).orElseThrow().getName()).isEqualTo("First Clinic");
-        assertThat(authService.login("owner@first.test", PASSWORD).accessToken()).isNotBlank();
+        assertThat(authService.login("owner@first.test", PASSWORD, "127.0.0.1").accessToken()).isNotBlank();
     }
 
     @Test

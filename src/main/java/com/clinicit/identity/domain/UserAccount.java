@@ -75,6 +75,10 @@ public class UserAccount {
         return new Actor(id, clinicId, role, doctorProfileId);
     }
 
+    public void changePasswordHash(String newPasswordHash) {
+        this.passwordHash = newPasswordHash;
+    }
+
     public void disable() {
         enabled = false;
     }

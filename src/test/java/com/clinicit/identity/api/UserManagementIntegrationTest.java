@@ -49,7 +49,7 @@ class UserManagementIntegrationTest extends PostgresIntegrationTest {
                 .andExpect(jsonPath("$.clinicId").value(clinic.getId().toString()))
                 .andExpect(jsonPath("$.password").doesNotExist());
 
-        authService.login("new.desk@city.test", PASSWORD);
+        authService.login("new.desk@city.test", PASSWORD, "127.0.0.1");
     }
 
     @Test

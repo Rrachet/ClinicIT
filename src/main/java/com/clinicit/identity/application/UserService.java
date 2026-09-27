@@ -28,6 +28,7 @@ public class UserService {
     private final AuthSessionRepository sessions;
     private final DoctorProfileRepository doctors;
     private final PasswordEncoder passwordEncoder;
+    private final LoginThrottle throttle;
     private final Clock clock;
 
     public UserService(
@@ -35,12 +36,14 @@ public class UserService {
             AuthSessionRepository sessions,
             DoctorProfileRepository doctors,
             PasswordEncoder passwordEncoder,
+            LoginThrottle throttle,
             Clock clock
     ) {
         this.users = users;
         this.sessions = sessions;
         this.doctors = doctors;
         this.passwordEncoder = passwordEncoder;
+        this.throttle = throttle;
         this.clock = clock;
     }
 
@@ -76,6 +79,29 @@ public class UserService {
         return users.findByIdAndClinicId(actor.userId(), actor.clinicId())
                 .map(UserResponse::from)
                 .orElseThrow(() -> new NotFoundException("User not found"));
+    }
+
+    /**
+     * Changes the caller's own password and revokes every session they have, including
+     * the one used for this request, so a stolen token or a forgotten logged-in device
+     * stops working. Wrong current passwords count against the same brute-force limit
+     * as login, so a stolen token cannot be used to guess the password.
+     */
+    public void changePassword(Actor actor, String currentPassword, String newPassword) {
+        UserAccount user = users.findByIdAndClinicId(actor.userId(), actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("User not found"));
+
+        boolean allowed = throttle.tryAccountAttempt(user.getEmail());
+        if (!allowed || !passwordEncoder.matches(currentPassword, user.getPasswordHash())) {
+            throw new InvalidRequestException("INVALID_CURRENT_PASSWORD", "Current password is incorrect");
+        }
+        if (currentPassword.equals(newPassword)) {
+            throw new InvalidRequestException("PASSWORD_UNCHANGED", "New password must differ from the current one");
+        }
+
+        user.changePasswordHash(passwordEncoder.encode(newPassword));
+        sessions.revokeAllForUser(user.getId(), clock.instant());
+        throttle.resetAccount(user.getEmail());
     }
 
     @Transactional(readOnly = true)

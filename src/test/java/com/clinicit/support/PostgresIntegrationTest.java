@@ -51,6 +51,7 @@ public abstract class PostgresIntegrationTest {
     /** 2026-03-10 11:00 in Asia/Kolkata (UTC+05:30). */
     protected static final Instant NOW = Instant.parse("2026-03-10T05:30:00Z");
     protected static final LocalDate TODAY = LocalDate.of(2026, 3, 10);
+    protected static final String FRONTEND_ORIGIN = "https://app.clinicit.test";
     protected static final String PASSWORD = "correct horse battery staple";
 
     @DynamicPropertySource
@@ -59,6 +60,9 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.username", PostgresTestDatabase::username);
         registry.add("spring.datasource.password", PostgresTestDatabase::password);
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "30");
+        // Background jobs are invoked directly by the tests that need them.
+        registry.add("clinicit.scheduling.enabled", () -> "false");
+        registry.add("clinicit.cors.allowed-origins", () -> FRONTEND_ORIGIN);
     }
 
     @TestConfiguration
@@ -84,7 +88,7 @@ public abstract class PostgresIntegrationTest {
     void resetDatabase() {
         clock.set(NOW);
         jdbc.execute("""
-                truncate table auth_sessions, users, queue_token_counters, queue_entries,
+                truncate table login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
                 """);
     }
@@ -147,7 +151,7 @@ public abstract class PostgresIntegrationTest {
     }
 
     protected String login(UserAccount user) {
-        return authService.login(user.getEmail(), PASSWORD).accessToken();
+        return authService.login(user.getEmail(), PASSWORD, "127.0.0.1").accessToken();
     }
 
     protected static RequestPostProcessor bearer(String token) {

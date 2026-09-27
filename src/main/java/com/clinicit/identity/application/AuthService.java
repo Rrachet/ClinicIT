@@ -25,6 +25,7 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final SessionTokens tokens;
     private final AuthProperties properties;
+    private final LoginThrottle throttle;
     private final Clock clock;
 
     /** Compared against when the email is unknown, so both failure paths cost one hash check. */
@@ -36,6 +37,7 @@ public class AuthService {
             PasswordEncoder passwordEncoder,
             SessionTokens tokens,
             AuthProperties properties,
+            LoginThrottle throttle,
             Clock clock
     ) {
         this.users = users;
@@ -43,24 +45,35 @@ public class AuthService {
         this.passwordEncoder = passwordEncoder;
         this.tokens = tokens;
         this.properties = properties;
+        this.throttle = throttle;
         this.clock = clock;
         this.dummyPasswordHash = passwordEncoder.encode("timing-equaliser-not-a-real-password");
     }
 
     /**
-     * Unknown email, wrong password and disabled account all fail the same way, with
-     * the same work done, so the response does not reveal which accounts exist.
+     * Unknown email, wrong password, disabled account and a throttled (temporarily locked)
+     * account or IP all fail the same way, with the same bcrypt work done, so the response
+     * reveals neither which accounts exist nor that a lock is in place.
      */
-    public LoginResponse login(String email, String password) {
-        Optional<UserAccount> found = users.findByEmail(UserAccount.normalizeEmail(email));
+    public LoginResponse login(String email, String password, String clientIp) {
+        String normalizedEmail = UserAccount.normalizeEmail(email);
 
+        // Both checks always run: the account attempt must be counted even if the IP is blocked.
+        boolean accountAllowed = throttle.tryAccountAttempt(normalizedEmail);
+        boolean ipAllowed = !throttle.isIpBlocked(clientIp);
+
+        Optional<UserAccount> found = users.findByEmail(normalizedEmail);
         boolean passwordMatches = passwordEncoder.matches(
                 password, found.map(UserAccount::getPasswordHash).orElse(dummyPasswordHash));
 
+        if (!passwordMatches) {
+            throttle.recordIpFailure(clientIp);
+        }
         UserAccount user = found
-                .filter(account -> passwordMatches && account.isEnabled())
+                .filter(account -> accountAllowed && ipAllowed && passwordMatches && account.isEnabled())
                 .orElseThrow(AuthenticationFailedException::new);
 
+        throttle.resetAccount(normalizedEmail);
         Instant now = clock.instant();
         String token = tokens.newToken();
         AuthSession session = sessions.save(
