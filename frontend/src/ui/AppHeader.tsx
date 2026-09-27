@@ -1,5 +1,8 @@
 "use client";
 
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
 import { useAuth } from "@/auth/AuthProvider";
 import type { FeedStatus } from "@/realtime/queueFeed";
 import { longDate } from "./format";
@@ -11,8 +14,15 @@ const FEED_TEXT: Record<FeedStatus, string> = {
   denied: "Live updates unavailable",
 };
 
+/** Admins work at the desk and also look after the clinic's figures. */
+const ADMIN_LINKS = [
+  { href: "/reception", label: "Reception" },
+  { href: "/admin", label: "Analytics" },
+];
+
 export function AppHeader({ title, clinicName, day, feed }: { title: string; clinicName?: string; day?: string; feed?: FeedStatus }) {
   const { session, logout } = useAuth();
+  const pathname = usePathname();
   return (
     <header className="app-header">
       <div className="app-header-left">
@@ -20,6 +30,15 @@ export function AppHeader({ title, clinicName, day, feed }: { title: string; cli
         <span className="app-title">{title}</span>
         {clinicName ? <span className="muted">{clinicName}</span> : null}
         {day ? <span className="muted">{longDate(day)}</span> : null}
+        {session?.user.role === "ADMIN" ? (
+          <nav className="app-nav" aria-label="Sections">
+            {ADMIN_LINKS.map(({ href, label }) => (
+              <Link key={href} href={href} aria-current={pathname === href ? "page" : undefined}>
+                {label}
+              </Link>
+            ))}
+          </nav>
+        ) : null}
       </div>
       <div className="app-header-right">
         {feed ? (

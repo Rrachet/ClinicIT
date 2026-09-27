@@ -170,3 +170,57 @@ export interface PatientNotification {
   nextAttemptAt: string | null;
   expiresAt: string;
 }
+
+// Operational analytics (Phase 7). Durations are seconds; null means "no data", never 0.
+
+export interface DailySummary {
+  date: string;
+  timezone: string;
+  doctorId: string | null;
+  scheduledAppointments: number;
+  patients: number;
+  completedConsultations: number;
+  averageWaitSeconds: number | null;
+  medianWaitSeconds: number | null;
+  averageConsultationSeconds: number | null;
+  averageDelaySeconds: number | null;
+  cancellations: number;
+  noShows: number;
+  cancellationRate: number | null;
+  noShowRate: number | null;
+  currentQueueLength: number;
+}
+
+export interface WaitTimes {
+  date: string;
+  doctorId: string | null;
+  calledPatients: number;
+  averageWaitSeconds: number | null;
+  medianWaitSeconds: number | null;
+  p90WaitSeconds: number | null;
+  maxWaitSeconds: number | null;
+  byHour: { hour: number; calledPatients: number; averageWaitSeconds: number | null; medianWaitSeconds: number | null }[];
+}
+
+export interface DoctorStats {
+  doctorId: string;
+  doctorName: string;
+  patientsCalled: number;
+  patientsHandled: number;
+  averageWaitSeconds: number | null;
+  averageConsultationSeconds: number | null;
+  consultationSeconds: number | null;
+  utilization: number | null;
+}
+
+export interface DoctorAnalytics {
+  date: string;
+  doctors: DoctorStats[];
+}
+
+export interface QueueAnalytics {
+  date: string;
+  doctorId: string | null;
+  currentQueueLength: number;
+  byHour: { hour: number; joined: number; completed: number; queueLength: number }[];
+}

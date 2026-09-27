@@ -7,7 +7,7 @@ import { bookFromReception, e2eState, signIn } from "./state";
  */
 test.skip(!process.env.CAPTURE_SCREENSHOTS, "set CAPTURE_SCREENSHOTS=1 to capture screenshots");
 
-test("capture reception, doctor and patient screens", async ({ browser }) => {
+test("capture reception, doctor, patient and analytics screens", async ({ browser }) => {
   const state = e2eState();
   const out = "test-results/screens";
   const reception = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
@@ -52,4 +52,10 @@ test("capture reception, doctor and patient screens", async ({ browser }) => {
   await doctor.getByRole("button", { name: "Start consultation" }).click();
   await doctor.getByRole("button", { name: "Complete consultation" }).click();
   await expect(doctor.getByText("No patient with you.")).toBeVisible();
+
+  const admin = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();
+  await signIn(admin, process.env.E2E_ADMIN_EMAIL!, process.env.E2E_ADMIN_PASSWORD!);
+  await admin.getByRole("link", { name: "Analytics" }).click();
+  await expect(admin.getByRole("table", { name: "Queue by hour" })).toBeVisible();
+  await admin.screenshot({ path: `${out}/analytics.png`, fullPage: true });
 });

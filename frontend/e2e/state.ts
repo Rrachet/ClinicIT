@@ -17,21 +17,26 @@ export function e2eState(): E2EState {
   return JSON.parse(readFileSync(join(__dirname, ".e2e-state.json"), "utf8"));
 }
 
-/** Creates a doctor through the real admin API, for tests that need a queue of their own. */
-export async function createDoctor(displayName: string): Promise<{ id: string; displayName: string }> {
+/** Calls the real API as the bootstrap admin (for setup steps that have no UI for this role). */
+export async function asAdmin<T>(method: "GET" | "POST", path: string, body?: unknown): Promise<T> {
   const api = process.env.E2E_API_URL ?? "http://localhost:8080";
   const login = await fetch(`${api}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email: process.env.E2E_ADMIN_EMAIL, password: process.env.E2E_ADMIN_PASSWORD }),
   }).then((r) => r.json());
-  const response = await fetch(`${api}/api/v1/doctors`, {
-    method: "POST",
+  const response = await fetch(`${api}${path}`, {
+    method,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${login.accessToken}` },
-    body: JSON.stringify({ displayName }),
+    body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!response.ok) throw new Error(`creating doctor failed: ${response.status}`);
+  if (!response.ok) throw new Error(`${method} ${path} failed: ${response.status}`);
   return response.json();
+}
+
+/** Creates a doctor through the real admin API, for tests that need a queue of their own. */
+export function createDoctor(displayName: string): Promise<{ id: string; displayName: string }> {
+  return asAdmin("POST", "/api/v1/doctors", { displayName });
 }
 
 /** Registers a patient and books them from the reception console's "New appointment" panel. */

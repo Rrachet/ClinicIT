@@ -16,6 +16,12 @@ describe("role routing", () => {
     expect(canEnter("ADMIN", "reception")).toBe(true);
     expect(canEnter("DOCTOR", "doctor")).toBe(true);
   });
+
+  it("opens clinic analytics to admins only", () => {
+    expect(canEnter("ADMIN", "admin")).toBe(true);
+    expect(canEnter("RECEPTIONIST", "admin")).toBe(false);
+    expect(canEnter("DOCTOR", "admin")).toBe(false);
+  });
 });
 
 describe("session storage", () => {

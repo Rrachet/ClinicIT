@@ -185,3 +185,28 @@ button, input, select { font: inherit; }
 .tone-go { border: 3px solid var(--ok); background: var(--ok-soft); }
 .tone-go .patient-headline { color: var(--ok); }
 .tone-attention .patient-headline { color: var(--warn); }
+
+/* Analytics (admin) */
+.toolbar { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; }
+.inline-field { display: inline-flex; align-items: center; gap: 0.5rem; font-size: 0.88rem; font-weight: 600; }
+.inline-field input { padding: 0.4rem 0.55rem; border: 1px solid var(--border); border-radius: 8px; font: inherit; font-weight: 400; background: var(--surface); color: var(--text); }
+.kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 0.75rem; }
+.kpi { display: flex; flex-direction: column; gap: 0.2rem; padding: 0.75rem 0.85rem; border: 1px solid var(--border); border-radius: 8px; }
+.kpi-value { font-size: 1.7rem; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.analytics-grid { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+@media (max-width: 1080px) { .analytics-grid { grid-template-columns: 1fr; } }
+.table th[scope="row"] { padding: 0.55rem 0.5rem; border-bottom: 1px solid var(--border); font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--text); font-size: 0.92rem; }
+.table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-cell { display: inline-flex; align-items: center; gap: 0.5rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar { display: inline-block; width: 64px; height: 8px; background: #eef1f4; border-radius: 999px; overflow: hidden; flex: none; }
+.bar-fill { display: block; height: 100%; background: var(--primary); border-radius: 999px; }
+.bar-fill.bar-muted { background: #9fb3c8; }
+.bar-fill.bar-warn { background: #d49a2a; }
+.queue-now { display: inline-flex; align-items: baseline; gap: 0.5rem; }
+.app-nav { display: inline-flex; gap: 0.75rem; }
+.app-nav a { color: var(--muted); font-weight: 600; text-decoration: none; }
+.app-nav a[aria-current="page"] { color: var(--primary); }
+.app-nav a:hover { color: var(--primary); }
+.toolbar .inline-field select { width: auto; }
+.table tr:last-child th[scope="row"] { border-bottom: 0; }
+.table.compact th[scope="row"] { padding: 0.35rem 0.4rem; }

@@ -2,14 +2,18 @@ import type { ApiClient } from "./client";
 import type {
   Appointment,
   Clinic,
+  DailySummary,
   Doctor,
+  DoctorAnalytics,
   LoginResponse,
   Patient,
   PatientNotification,
   PublicQueueStatus,
+  QueueAnalytics,
   QueueBoard,
   QueueEntry,
   User,
+  WaitTimes,
 } from "./types";
 
 /** Typed wrappers around every backend endpoint the UI uses. No logic beyond HTTP. */
@@ -55,6 +59,14 @@ export function clinicApi(http: ApiClient) {
       http.get<PatientNotification[]>("/api/v1/notifications", { query: { appointmentId } }),
     retryNotification: (notificationId: string) =>
       http.post<PatientNotification>(`/api/v1/notifications/${id(notificationId)}/retry`),
+
+    analyticsToday: (date?: string, doctorId?: string) =>
+      http.get<DailySummary>("/api/v1/analytics/today", { query: { date, doctorId } }),
+    analyticsWaitTimes: (date?: string, doctorId?: string) =>
+      http.get<WaitTimes>("/api/v1/analytics/wait-times", { query: { date, doctorId } }),
+    analyticsDoctors: (date?: string) => http.get<DoctorAnalytics>("/api/v1/analytics/doctors", { query: { date } }),
+    analyticsQueue: (date?: string, doctorId?: string) =>
+      http.get<QueueAnalytics>("/api/v1/analytics/queue", { query: { date, doctorId } }),
 
     publicStatus: (code: string) =>
       http.get<PublicQueueStatus>(`/api/v1/public/queue-status/${id(code)}`, { anonymous: true }),
