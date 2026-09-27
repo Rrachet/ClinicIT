@@ -36,6 +36,8 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
     private static final int PATIENTS_PER_DOCTOR = 25;
 
     @Autowired QueueService queue;
+    @Autowired com.clinicit.appointment.application.AppointmentService appointmentService;
+    @Autowired com.clinicit.analytics.application.AnalyticsService analytics;
 
     Actor desk;
 
@@ -88,7 +90,22 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
     private void runRandomOperation(
             Random random, List<DoctorProfile> doctorList, ConcurrentLinkedQueue<UUID> notYetJoined, List<UUID> entryIds
     ) {
-        int dice = random.nextInt(10);
+        int dice = random.nextInt(13);
+        if (dice == 10) {
+            // Races the join of the same appointment: exactly one of them can win.
+            UUID appointmentId = notYetJoined.peek();
+            if (appointmentId != null) appointmentService.markNoShow(desk, appointmentId);
+            return;
+        }
+        if (dice == 11) {
+            // Readers must never deadlock with writers.
+            analytics.summary(desk, null, doctorList.get(random.nextInt(doctorList.size())).getId());
+            return;
+        }
+        if (dice == 12) {
+            waitTimePredictions.forDoctorToday(desk, doctorList.get(random.nextInt(doctorList.size())).getId());
+            return;
+        }
         if (dice < 3 || entryIds.isEmpty()) {
             UUID appointmentId = notYetJoined.poll();
             if (appointmentId != null) {
@@ -137,9 +154,9 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.queryForObject("""
                 select count(*) from appointments a
                 where not exists (select 1 from queue_entries q where q.appointment_id = a.id)
-                  and a.status <> 'ARRIVED'
+                  and a.status not in ('ARRIVED', 'NO_SHOW')
                 """, Integer.class))
-                .as("appointments outside the queue are untouched").isZero();
+                .as("appointments outside the queue were only ever marked no-show").isZero();
 
         assertThat(jdbc.queryForObject(
                 "select last_token from queue_token_counters where clinic_id = ?", Integer.class, clinic.getId()))
