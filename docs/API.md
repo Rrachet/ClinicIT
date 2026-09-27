@@ -1,18 +1,31 @@
 # ClinicIT API Roadmap
 
-The exact routes will be finalized with the implementation, but the first API surface is:
+All endpoints except `POST /api/v1/auth/login` and `GET /api/v1/health` require
+`Authorization: Bearer <token>`. The clinic is always the caller's; requests never carry a
+`clinicId`. Roles per endpoint and error codes: [SECURITY.md](SECURITY.md).
+
+## Auth and staff
+
+- POST /api/v1/auth/login               (public) -> accessToken
+- POST /api/v1/auth/logout
+- GET  /api/v1/auth/me
+- POST /api/v1/users                    (admin) create staff account
+- GET  /api/v1/users                    (admin)
+- POST /api/v1/users/{id}/disable       (admin) also revokes the user's tokens
+- POST /api/v1/doctors                  (admin) create doctor profile
+- GET  /api/v1/doctors
 
 ## Patients
 
 - POST /api/v1/patients
 - GET /api/v1/patients/{id}
-- GET /api/v1/patients?phone=&name=
+- GET /api/v1/patients?name=
 
 ## Appointments
 
 - POST /api/v1/appointments
 - GET /api/v1/appointments/{id}
-- GET /api/v1/appointments?date=&doctorId=&status=
+- GET /api/v1/appointments?date=&doctorId=   (doctors: always their own)
 - POST /api/v1/appointments/{id}/confirm
 - POST /api/v1/appointments/{id}/cancel
 - POST /api/v1/appointments/{id}/arrive
@@ -30,8 +43,8 @@ for the changes from the original sketch.
 - POST /api/v1/queue-entries/{id}/skip
 - POST /api/v1/queue-entries/{id}/requeue
 - POST /api/v1/queue-entries/{id}/no-show
-- POST /api/v1/queues/call-next         (body: doctorId)
-- GET  /api/v1/queues/today?doctorId=
+- POST /api/v1/queues/call-next         (body: doctorId; optional for doctors)
+- GET  /api/v1/queues/today?doctorId=     (optional for doctors)
 
 ## Patient status
 
