@@ -9,6 +9,7 @@ All endpoints except `POST /api/v1/auth/login` and `GET /api/v1/health` require
 - POST /api/v1/auth/login               (public) -> accessToken
 - POST /api/v1/auth/logout
 - GET  /api/v1/auth/me
+- POST /api/v1/auth/password             change own password; revokes all own tokens
 - POST /api/v1/users                    (admin) create staff account
 - GET  /api/v1/users                    (admin)
 - POST /api/v1/users/{id}/disable       (admin) also revokes the user's tokens

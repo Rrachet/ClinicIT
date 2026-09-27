@@ -64,6 +64,51 @@ There is no external authorization server; the resource-server module is used on
 protection does not apply and is disabled. If the frontend later stores the token in a cookie, CSRF must be
 re-enabled.
 
+**Brute-force protection.** Counters live in PostgreSQL (`login_throttle`), so there is no extra infrastructure,
+and several app instances share them. The keys are SHA-256 hashes, so typed emails and IP addresses are not stored
+in clear.
+
+| Limit | Default | Counts | Reset |
+|---|---|---|---|
+| Per account (email) | 5 per 15 min | every attempt, **reserved before** the password check with an atomic upsert, so parallel guesses cannot all get past | on successful login, or when the window ends |
+| Per client IP | 30 per 15 min | failures only, so one address cannot spray many accounts, while a clinic's staff behind one NAT can still log in | when the window ends |
+
+A throttled login returns exactly the same `401 INVALID_CREDENTIALS` as a wrong password, does the same bcrypt
+work, and sends no `Retry-After` header. The response therefore reveals neither that an account exists nor that it
+is locked. Unknown emails are throttled too.
+
+The throttle writes in its own transaction (`REQUIRES_NEW`). A failed login rolls back its own transaction, and
+the failure count must survive that rollback; a test catches the difference.
+
+The client IP is the server-observed remote address. Behind a reverse proxy, set
+`server.forward-headers-strategy=native` (or `framework`) so it is the real client address, not the proxy's.
+
+The trade-off: someone who knows a user's email can keep that account locked by repeatedly failing its login. This
+is the usual cost of per-account lockout. It is limited to 15-minute windows, and other accounts are unaffected.
+
+**Password change.** `POST /api/v1/auth/password {currentPassword, newPassword}` returns `204`.
+- It requires the current password. Wrong guesses count against the same per-account limit, so a stolen token
+  cannot be used to brute-force the password.
+- On success, **every session of the user is revoked, including the one used for the request**. Other devices and
+  any stolen token stop working at once, and the client must log in again.
+- Errors: `400 INVALID_CURRENT_PASSWORD`, `400 PASSWORD_UNCHANGED`, and `400 VALIDATION_ERROR` for a password under
+  12 characters.
+
+**Cleanup.** `AuthCleanup` runs hourly (`clinicit.auth.cleanup-interval`). It deletes sessions that are expired or
+revoked, since they can never authenticate again, and throttle rows whose window has passed. It deletes in batches
+of 1000, each in its own short transaction, so a backlog never holds long locks. The deletes are idempotent, so
+running on several instances at once is safe. Scheduling can be switched off with `clinicit.scheduling.enabled=false`.
+
+**CORS.** `CLINICIT_CORS_ALLOWED_ORIGINS` is a comma-separated list of exact origins, such as
+`https://app.clinicit.example`.
+- Wildcards and non-origin values (a path or query) are refused at startup. An empty list, the default, allows no
+  cross-origin access.
+- Allowed: methods `GET`, `POST`; request headers `Authorization`, `Content-Type`; exposed `WWW-Authenticate`;
+  preflight cached for 1 hour.
+- `allowCredentials` is **false**. Tokens travel in the `Authorization` header, never in cookies, so the browser
+  has no ambient credential to send.
+- CORS headers are also added to 401/403 responses, so the frontend can read the error.
+
 **First admin.** On an empty database, `BootstrapAdmin` creates the first clinic and its admin from environment
 variables. Nothing is committed to Git. It does nothing once any user exists.
 
@@ -115,7 +160,7 @@ SQL fix:
 | Endpoint | ADMIN | RECEPTIONIST | DOCTOR |
 |---|---|---|---|
 | `POST /auth/login` | public | public | public |
-| `POST /auth/logout`, `GET /auth/me` | ✓ | ✓ | ✓ |
+| `POST /auth/logout`, `GET /auth/me`, `POST /auth/password` | ✓ | ✓ | ✓ |
 | `POST /users`, `GET /users`, `POST /users/{id}/disable` | ✓ | | |
 | `POST /doctors` | ✓ | | |
 | `GET /doctors` | ✓ | ✓ | ✓ |
@@ -154,6 +199,10 @@ catch-all handler would turn them into 500s.
 | `AuthenticationIntegrationTest` | Login, case-insensitive email, identical failures, bcrypt storage, token hashing, expiry, logout revoking only that token, the 401 challenge. |
 | `UserManagementIntegrationTest` | Account creation rules, disabling revokes tokens immediately, the admin cannot lock themselves out, the database rejects cross-clinic doctor links. |
 | `BootstrapAdminIntegrationTest`, `ActorTest` | First-admin bootstrap, doctor/front-desk resolution rules. |
+| `LoginThrottleIntegrationTest` | Account lock after 5 attempts with an identical generic 401; temporary lock; success resets the counter; unknown emails throttled; per-IP spray blocked without penalising NAT'd staff; 20 parallel guesses all counted; no clear-text keys. |
+| `PasswordChangeIntegrationTest` | Every session revoked; old password dead, new one works; wrong current password changes nothing; a stolen token cannot brute-force the current password; length and "unchanged" rules. |
+| `AuthCleanupIntegrationTest` | Expired and revoked sessions purged, active ones kept; stale throttle rows purged. |
+| `CorsIntegrationTest` | Allowed-origin preflight without credentials; unknown origin rejected; CORS headers on 401; wildcard configuration refused. |
 
 Each protection was checked by breaking it on purpose and confirming a test fails: unscoped patient lookup,
 unscoped queue-entry lock, a missing role annotation, `permitAll` instead of `authenticated`, and a missing doctor
@@ -161,14 +210,11 @@ ownership check.
 
 ## Known gaps / next steps
 
-- **No rate limiting or lockout on login yet.** bcrypt makes each guess slow, but online guessing is not
-  throttled. Add per-account and per-IP throttling, ideally in Redis, before a public deployment (Phase 9
-  hardening).
-- **Expired and revoked sessions are never deleted.** Needs a scheduled cleanup job.
-- **No password change or reset.** Admins set the initial password. A self-service change needs the current
-  password; reset needs email or SMS, which comes with notifications in Phase 6.
-- **No audit log** of who changed what. Planned alongside Phase 7.
+- **No password reset** ("forgot password"). It needs an email or SMS channel, which comes with notifications in
+  Phase 6. Until then an admin can create a new account or, later, reset one.
+- **No audit log** of who changed what. It will be its own piece of work.
 - **Scoping is enforced in application code plus foreign keys.** PostgreSQL row-level security with a per-request
   `app.clinic_id` setting would add a database-enforced read barrier. It is worth considering once the schema
   settles.
-- **CORS** will be configured with the frontend (Phase 5).
+- **Throttling is per account and per IP only.** A distributed attack from many IPs against many accounts is slowed
+  by bcrypt but not blocked. A WAF or CAPTCHA at the edge covers that tier.
