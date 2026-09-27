@@ -1,0 +1,142 @@
+{
+  "model_version": "wait-random-forest-512425ec89",
+  "algorithm": "random_forest",
+  "features": [
+    "day_of_week",
+    "minute_of_day",
+    "patients_ahead",
+    "queue_length",
+    "completed_today",
+    "doctor_busy",
+    "active_patient_minutes",
+    "calls_last_hour",
+    "recent_consultation_minutes",
+    "historical_consultation_minutes",
+    "historical_consultation_count",
+    "historical_wait_minutes"
+  ],
+  "target": "actual_wait_minutes",
+  "split": {
+    "method": "temporal, by clinic-local day",
+    "train": {
+      "rows": 16197,
+      "days": 42,
+      "first_day": "2026-01-05",
+      "last_day": "2026-02-21"
+    },
+    "validation": {
+      "rows": 3561,
+      "days": 9,
+      "first_day": "2026-02-23",
+      "last_day": "2026-03-04"
+    },
+    "test": {
+      "rows": 3246,
+      "days": 9,
+      "first_day": "2026-03-05",
+      "last_day": "2026-03-14"
+    }
+  },
+  "applicability": {
+    "min_history_consultations": 20,
+    "max_patients_ahead": 26,
+    "test_rows_where_model_applies": 3246,
+    "test_rows": 3246
+  },
+  "model_selection_on_validation": {
+    "hgb_absolute_error": {
+      "n": 3561,
+      "mae": 6.391,
+      "rmse": 9.015,
+      "median_absolute_error": 4.325,
+      "mean_error": -2.724
+    },
+    "hgb_squared_error": {
+      "n": 3561,
+      "mae": 6.453,
+      "rmse": 8.958,
+      "median_absolute_error": 4.468,
+      "mean_error": -2.269
+    },
+    "random_forest": {
+      "n": 3561,
+      "mae": 6.236,
+      "rmse": 8.692,
+      "median_absolute_error": 4.378,
+      "mean_error": -1.982
+    },
+    "baseline": {
+      "n": 3561,
+      "mae": 16.671,
+      "rmse": 20.587,
+      "median_absolute_error": 13.699,
+      "mean_error": -16.41
+    }
+  },
+  "test": {
+    "model": {
+      "n": 3246,
+      "mae": 7.297,
+      "rmse": 10.549,
+      "median_absolute_error": 4.749,
+      "mean_error": -3.196
+    },
+    "baseline": {
+      "n": 3246,
+      "mae": 17.804,
+      "rmse": 22.55,
+      "median_absolute_error": 14.091,
+      "mean_error": -17.438
+    },
+    "model_at_check_in": {
+      "n": 729,
+      "mae": 7.347,
+      "rmse": 10.779,
+      "median_absolute_error": 5.169,
+      "mean_error": -1.813
+    },
+    "baseline_at_check_in": {
+      "n": 729,
+      "mae": 15.474,
+      "rmse": 21.743,
+      "median_absolute_error": 11.067,
+      "mean_error": -14.422
+    },
+    "served_all_test_rows": {
+      "n": 3246,
+      "mae": 7.297,
+      "rmse": 10.549,
+      "median_absolute_error": 4.749,
+      "mean_error": -3.196
+    },
+    "baseline_all_test_rows": {
+      "n": 3246,
+      "mae": 17.804,
+      "rmse": 22.549,
+      "median_absolute_error": 14.047,
+      "mean_error": -17.439
+    }
+  },
+  "intervals": {
+    "nominal_coverage": 0.8,
+    "conformal_adjustment_minutes": 5.261,
+    "validation": {
+      "coverage": 0.801,
+      "mean_width": 20.553
+    },
+    "test_model": {
+      "coverage": 0.756,
+      "mean_width": 21.032
+    },
+    "test_baseline_rule": {
+      "coverage": 0.401,
+      "mean_width": 26.639
+    }
+  },
+  "reproducibility": {
+    "seed": 20260105,
+    "dataset_sha256": "c7d30edca839813fc92c4717fe4534a2c69637a601d1bdd9976768840f2e26c6",
+    "scikit_learn": "1.9.1",
+    "numpy": "2.4.6"
+  }
+}
