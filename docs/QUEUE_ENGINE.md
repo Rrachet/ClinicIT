@@ -17,7 +17,19 @@ Appointment 16:00, Dr. Sharma  ──arrive──▶  ARRIVED  ──join──�
 | `cancel` allowed from any non-completed status | A patient mid-consultation could be cancelled, leaving the queue entry dangling | Status changes go through an explicit transition table; cancel only from BOOKED/CONFIRMED |
 | Status had a public setter | Any code could bypass the state machine | Setter removed; `Appointment.transitionTo` / `QueueEntry` methods are the only way |
 | Not-found raised `IllegalArgumentException` | Returned HTTP 500 | `NotFoundException` → 404 |
-| Appointment creation did not check the patient/doctor belong to the clinic | Cross-clinic data leak into queues | Checked on create (404 if not in clinic) |
+| Appointment creation did not check the patient/doctor belong to the clinic | Cross-clinic data leak into queues | Checked on create (404 if not in clinic), and enforced by composite foreign keys (V4) |
+| `hibernate.jdbc.time_zone: UTC` shifted `LocalDateTime` by the JVM offset on write | A 16:00 appointment was stored as 10:30 on an IST JVM (23:00 on a US one). Java round-tripped it, so tests passed, but raw SQL/analytics were wrong and a server timezone change would move every appointment | Setting removed; regression test reads the raw column; the suite runs with a non-UTC, non-clinic JVM zone |
+
+Found in the final Phase 2 review:
+
+| Problem | Impact | Fix |
+|---|---|---|
+| `POST /appointments/{id}/no-show` accepted a SKIPPED appointment | Appointment NO_SHOW while its queue entry stayed SKIPPED | Appointment endpoints refuse queue-managed statuses (`QUEUE_MANAGED`) |
+| `IllegalStateException` was mapped to `409 INVALID_STATE` | Internal bugs reported as client conflicts | Removed; unexpected errors → logged `500 INTERNAL_ERROR` without internals |
+| Malformed JSON / bad UUID / unknown route used Spring's default error body | Inconsistent error contract | All go through `ApiError` (`BAD_REQUEST`, `NOT_FOUND`, `METHOD_NOT_ALLOWED`) |
+| Each test class with MockMvc created its own Spring context and 40-connection pool | Would exhaust Postgres `max_connections` as suites grow | One shared context for all Postgres tests |
+| `CLINICIT_TEST_DB_URL` could point at any database | Tests truncate every table | Refuses a database whose name does not contain `test` |
+| V3 migration was only tested on an empty database | Backfill of existing queue data unverified | Migration test upgrades a populated V2 database |
 
 ## State machines
 
@@ -26,11 +38,15 @@ Appointment (the queue drives everything from WAITING onwards):
 ```
 BOOKED → CONFIRMED → ARRIVED → WAITING → CALLED → IN_CONSULTATION → COMPLETED
 BOOKED, CONFIRMED → CANCELLED
+CONFIRMED         → NO_SHOW   (never arrived; only once the appointment time has passed)
 ARRIVED           → NO_SHOW
 WAITING, CALLED   → SKIPPED
 SKIPPED           → WAITING   (requeue)
 SKIPPED           → NO_SHOW
 ```
+
+Once an appointment is in the queue (WAITING, CALLED, IN_CONSULTATION, SKIPPED) its status belongs to the queue
+entry: the appointment endpoints reject it with `QUEUE_MANAGED`, so the two can never be changed independently.
 
 Queue entry: the same states from WAITING onwards. Each queue status maps 1:1 onto the appointment status of
 the same name, and every queue mutation updates both **in one transaction**. A unit test asserts that every
@@ -47,9 +63,9 @@ The planned model was kept. It was extended in three places:
   handle a returning patient.
 - **SKIPPED → NO_SHOW.** End-of-day cleanup for a skipped patient who never returned.
 
-**Open question:** there is no transition from CONFIRMED to NO_SHOW for a patient who booked and never arrived.
-That is the most common no-show in practice, and the future no-show prediction will need it recorded. It was
-not added because it changes the agreed model.
+- **CONFIRMED → NO_SHOW.** A patient who booked and never arrived. This is the most common no-show in practice and
+  the history the no-show prediction will learn from. It is rejected (`TOO_EARLY`) before the appointment's
+  clinic-local start time. An unconfirmed BOOKED appointment cannot be a no-show; it is cancelled instead.
 
 ## Invariants and where they are enforced
 
@@ -60,6 +76,7 @@ not added because it changes the agreed model.
 | At most one active (CALLED / IN_CONSULTATION) patient per doctor per day | Doctor row lock + check | partial unique index `uk_queue_one_active_per_doctor` |
 | Valid status values | enums + transition tables | `check` constraints |
 | Token > 0 | counter starts at 1 | `check` constraint |
+| Patient, doctor, appointment and queue entry belong to the same clinic; entry has its appointment's doctor | clinic checks on create; entry copies from appointment | composite foreign keys (V4) |
 
 The database constraints are tested directly with SQL (`QueueSchemaConstraintsIntegrationTest`), so they hold
 even if a future code path bypasses the service.
@@ -109,6 +126,9 @@ each other in a cycle (no deadlocks).
   `FOR UPDATE ... LIMIT 1`, Postgres waits for that row, re-checks it after the skip commits, finds it no
   longer WAITING, and returns **no row** even though others are waiting. `SKIP LOCKED` moves on to the next
   patient. A test reproduces exactly this.
+- **Lock strength.** Hibernate issues `FOR NO KEY UPDATE` for `PESSIMISTIC_WRITE` and the native call-next query
+  does the same. Unlike `FOR UPDATE`, it does not block the `FOR KEY SHARE` locks that foreign-key checks take,
+  so creating an appointment for a doctor is not held up by that doctor's call-next.
 - **Optimistic `@Version` on `queue_entries`** is defence in depth. A stale in-memory entry can never
   overwrite a newer one. Conflicts map to `409 CONCURRENT_MODIFICATION`.
 
@@ -138,7 +158,7 @@ by allowing two CALLED entries in the partial index.
 | POST | `/api/v1/queue-entries/{id}/no-show` | SKIPPED → NO_SHOW |
 | POST | `/api/v1/queues/call-next` `{doctorId}` | Call the lowest waiting token for the doctor |
 | GET | `/api/v1/queues/today?doctorId=` | Staff board: current token, waiting count, entries with patient name and patients ahead |
-| POST | `/api/v1/appointments/{id}/no-show` | ARRIVED → NO_SHOW (left before joining the queue) |
+| POST | `/api/v1/appointments/{id}/no-show` | CONFIRMED → NO_SHOW (never arrived, after the appointment time) or ARRIVED → NO_SHOW (left before joining) |
 
 Changes from the Phase 0 sketch:
 
@@ -155,12 +175,17 @@ Error contract (`ApiError.code`):
 |---|---|---|
 | 404 | `NOT_FOUND` | unknown appointment / entry / doctor |
 | 409 | `INVALID_STATE` | transition not allowed from the current status |
+| 409 | `QUEUE_MANAGED` | appointment endpoint used on an appointment that is in the queue |
+| 409 | `TOO_EARLY` | no-show for a confirmed appointment before its time |
 | 409 | `NOT_TODAY` | joining with an appointment not scheduled today |
 | 409 | `DOCTOR_BUSY` | call-next while the doctor has an active patient |
 | 409 | `QUEUE_EMPTY` | call-next with nobody waiting |
 | 409 | `CONCURRENT_MODIFICATION` | lock / version conflict; safe to retry |
 | 409 | `CONSTRAINT_VIOLATION` | a DB invariant caught something the service did not |
-| 400 | `VALIDATION_ERROR` | malformed request |
+| 400 | `VALIDATION_ERROR` | request body failed validation |
+| 400 | `BAD_REQUEST` | malformed JSON, invalid id, missing parameter |
+| 404/405 | `NOT_FOUND` / `METHOD_NOT_ALLOWED` | unknown route / wrong HTTP method |
+| 500 | `INTERNAL_ERROR` | a bug; logged server-side, no details returned |
 
 `patientsAhead` counts WAITING patients with a lower token. Skipped patients do not count.
 
@@ -174,6 +199,9 @@ locks, `SKIP LOCKED`, `ON CONFLICT` and partial indexes. Flyway runs every migra
   (`CLINICIT_TEST_DB_USERNAME` / `CLINICIT_TEST_DB_PASSWORD` are optional).
 - Otherwise Testcontainers starts `postgres:16-alpine` when Docker is available.
 - With neither, the Postgres tests are **skipped** (reported as skipped, not passed).
+- All Postgres test classes share one Spring context and connection pool.
+- Surefire runs the JVM as `America/Los_Angeles`: neither UTC nor the test clinic's zone, so any code that uses the
+  JVM default zone instead of the clinic's fails a test.
 
 | Suite | Covers |
 |---|---|
@@ -182,9 +210,14 @@ locks, `SKIP LOCKED`, `ON CONFLICT` and partial indexes. Flyway runs every migra
 | `QueueConcurrencyIntegrationTest` | 24 simultaneous joins → tokens 1..24 exactly; same appointment joined 10× → one entry, counter = 1; 10 simultaneous call-next → exactly one call; SKIP LOCKED behaviour; skip vs start race |
 | `QueueSchemaConstraintsIntegrationTest` | DB constraints hold when the service is bypassed |
 | `QueueApiIntegrationTest` | Receptionist → doctor flow over HTTP, error codes, cross-clinic appointment rejected |
+| `QueueStressIntegrationTest` | 12 workers × 120 random join/call/start/complete/skip/requeue/no-show operations across 3 doctors; fails on any deadlock, lock or constraint error, then checks every invariant in SQL |
+| `AppointmentServiceIntegrationTest` | CONFIRMED → NO_SHOW timing, QUEUE_MANAGED guard, raw storage of clinic-local time |
+| `FlywayMigrationIntegrationTest` | Upgrade of a populated V2 database (doctor backfill, counter seeding) |
+| `ApiErrorContractIntegrationTest` | Framework errors use the `ApiError` shape |
 
 The concurrency tests were checked by breaking each safeguard in turn and confirming the matching test fails:
-the naive `max+1` allocator, dropping `SKIP LOCKED`, and removing the doctor lock.
+the naive `max+1` allocator, dropping `SKIP LOCKED`, and removing the doctor lock. The stress test also catches
+the allocator and doctor-lock breaks.
 
 ## Deliberately deferred
 
