@@ -1,6 +1,9 @@
 package com.clinicit.queue.domain;
 
+import com.clinicit.appointment.domain.Appointment;
+import com.clinicit.common.domain.InvalidStateTransitionException;
 import jakarta.persistence.*;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
@@ -19,21 +22,24 @@ public class QueueEntry {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "appointment_id", nullable = false, unique = true)
+    @Column(name = "appointment_id", nullable = false, unique = true, updatable = false)
     private UUID appointmentId;
 
-    @Column(name = "clinic_id", nullable = false)
+    @Column(name = "clinic_id", nullable = false, updatable = false)
     private UUID clinicId;
 
-    @Column(name = "queue_date", nullable = false)
+    @Column(name = "doctor_id", nullable = false, updatable = false)
+    private UUID doctorId;
+
+    @Column(name = "queue_date", nullable = false, updatable = false)
     private LocalDate queueDate;
 
-    @Column(name = "token_number", nullable = false)
+    @Column(name = "token_number", nullable = false, updatable = false)
     private Integer tokenNumber;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
-    private QueueStatus status = QueueStatus.WAITING;
+    private QueueStatus status;
 
     @Column(name = "checked_in_at")
     private Instant checkedInAt;
@@ -47,32 +53,90 @@ public class QueueEntry {
     @Column(name = "completed_at")
     private Instant completedAt;
 
+    @Column(name = "skipped_at")
+    private Instant skippedAt;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
-    @PrePersist
-    void onCreate() {
-        createdAt = Instant.now();
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    // Optimistic lock: a stale copy of the entry can never overwrite a newer state.
+    @Version
+    @Column(nullable = false)
+    private long version;
+
+    protected QueueEntry() {
+        // for JPA
+    }
+
+    /** Creates the entry for an appointment that has just joined the queue with the given token. */
+    public static QueueEntry join(Appointment appointment, LocalDate queueDate, int tokenNumber, Instant now) {
+        QueueEntry entry = new QueueEntry();
+        entry.appointmentId = appointment.getId();
+        entry.clinicId = appointment.getClinicId();
+        entry.doctorId = appointment.getDoctorId();
+        entry.queueDate = queueDate;
+        entry.tokenNumber = tokenNumber;
+        entry.status = QueueStatus.WAITING;
+        entry.checkedInAt = now;
+        entry.createdAt = now;
+        entry.updatedAt = now;
+        return entry;
+    }
+
+    public void call(Instant now) {
+        transitionTo(QueueStatus.CALLED, now);
+        calledAt = now;
+    }
+
+    public void startConsultation(Instant now) {
+        transitionTo(QueueStatus.IN_CONSULTATION, now);
+        consultationStartedAt = now;
+    }
+
+    public void complete(Instant now) {
+        transitionTo(QueueStatus.COMPLETED, now);
+        completedAt = now;
+    }
+
+    public void skip(Instant now) {
+        transitionTo(QueueStatus.SKIPPED, now);
+        skippedAt = now;
+    }
+
+    /** A skipped patient came back; they keep their token and so their place in line. */
+    public void requeue(Instant now) {
+        transitionTo(QueueStatus.WAITING, now);
+        calledAt = null;
+    }
+
+    public void markNoShow(Instant now) {
+        transitionTo(QueueStatus.NO_SHOW, now);
+    }
+
+    private void transitionTo(QueueStatus target, Instant now) {
+        if (!status.canTransitionTo(target)) {
+            throw new InvalidStateTransitionException("queue entry", status, target);
+        }
+        status = target;
+        updatedAt = now;
     }
 
     public UUID getId() { return id; }
     public UUID getAppointmentId() { return appointmentId; }
-    public void setAppointmentId(UUID appointmentId) { this.appointmentId = appointmentId; }
     public UUID getClinicId() { return clinicId; }
-    public void setClinicId(UUID clinicId) { this.clinicId = clinicId; }
+    public UUID getDoctorId() { return doctorId; }
     public LocalDate getQueueDate() { return queueDate; }
-    public void setQueueDate(LocalDate queueDate) { this.queueDate = queueDate; }
     public Integer getTokenNumber() { return tokenNumber; }
-    public void setTokenNumber(Integer tokenNumber) { this.tokenNumber = tokenNumber; }
     public QueueStatus getStatus() { return status; }
-    public void setStatus(QueueStatus status) { this.status = status; }
     public Instant getCheckedInAt() { return checkedInAt; }
-    public void setCheckedInAt(Instant checkedInAt) { this.checkedInAt = checkedInAt; }
     public Instant getCalledAt() { return calledAt; }
-    public void setCalledAt(Instant calledAt) { this.calledAt = calledAt; }
     public Instant getConsultationStartedAt() { return consultationStartedAt; }
-    public void setConsultationStartedAt(Instant consultationStartedAt) { this.consultationStartedAt = consultationStartedAt; }
     public Instant getCompletedAt() { return completedAt; }
-    public void setCompletedAt(Instant completedAt) { this.completedAt = completedAt; }
+    public Instant getSkippedAt() { return skippedAt; }
     public Instant getCreatedAt() { return createdAt; }
+    public Instant getUpdatedAt() { return updatedAt; }
+    public long getVersion() { return version; }
 }
