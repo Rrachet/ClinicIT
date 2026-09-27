@@ -10,6 +10,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findFirstByClinicIdAndPhone(UUID clinicId, String phone);
 
+    Optional<Patient> findByIdAndClinicId(UUID id, UUID clinicId);
+
     List<Patient> findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullNameAsc(
             UUID clinicId,
             String fullName

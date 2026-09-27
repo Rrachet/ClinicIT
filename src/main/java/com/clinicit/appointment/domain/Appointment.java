@@ -1,5 +1,6 @@
 package com.clinicit.appointment.domain;
 
+import com.clinicit.common.domain.InvalidStateTransitionException;
 import jakarta.persistence.*;
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -60,7 +61,15 @@ public class Appointment {
     public LocalDateTime getScheduledAt() { return scheduledAt; }
     public void setScheduledAt(LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
     public AppointmentStatus getStatus() { return status; }
-    public void setStatus(AppointmentStatus status) { this.status = status; }
+
+    /** The only way to change status, so every change goes through the state machine. */
+    public void transitionTo(AppointmentStatus target) {
+        if (!status.canTransitionTo(target)) {
+            throw new InvalidStateTransitionException("appointment", status, target);
+        }
+        this.status = target;
+    }
+
     public String getReasonSummary() { return reasonSummary; }
     public void setReasonSummary(String reasonSummary) { this.reasonSummary = reasonSummary; }
     public Instant getCreatedAt() { return createdAt; }
