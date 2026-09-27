@@ -12,7 +12,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 /**
@@ -40,25 +40,35 @@ public class BootstrapAdmin implements ApplicationRunner {
     private final ClinicRepository clinics;
     private final UserAccountRepository users;
     private final PasswordEncoder passwordEncoder;
+    private final TransactionTemplate transactions;
 
     public BootstrapAdmin(
             Properties properties,
             ClinicRepository clinics,
             UserAccountRepository users,
-            PasswordEncoder passwordEncoder
+            PasswordEncoder passwordEncoder,
+            TransactionTemplate transactions
     ) {
         this.properties = properties;
         this.clinics = clinics;
         this.users = users;
         this.passwordEncoder = passwordEncoder;
+        this.transactions = transactions;
     }
 
+    /**
+     * Not transactional itself: without bootstrap settings (the normal case) startup does not
+     * touch the database here at all.
+     */
     @Override
-    @Transactional
     public void run(ApplicationArguments args) {
         if (!StringUtils.hasText(properties.adminEmail())) {
             return;
         }
+        transactions.executeWithoutResult(status -> bootstrap());
+    }
+
+    private void bootstrap() {
         if (users.count() > 0) {
             log.info("Bootstrap admin configured but users already exist; skipping");
             return;

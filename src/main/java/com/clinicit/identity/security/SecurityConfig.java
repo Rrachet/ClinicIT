@@ -27,7 +27,8 @@ import java.util.List;
 /**
  * Two layers, see docs/SECURITY.md:
  * <ol>
- *   <li>URL level (here): everything except login and health needs a valid bearer token.</li>
+ *   <li>URL level (here): everything except login, health, the public patient status and the
+ *       internal-port actuator endpoints needs a valid bearer token.</li>
  *   <li>Method level: every endpoint declares its roles ({@link AdminOnly}, {@link FrontDesk},
  *       {@link AnyStaff}); services then scope every query to the caller's clinic.</li>
  * </ol>
@@ -58,6 +59,11 @@ public class SecurityConfig implements WebMvcConfigurer {
                         // Patient status by unguessable code; read-only, no patient data.
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/queue-status/*").permitAll()
                         .requestMatchers("/error").permitAll()
+                        // Probes and metrics. Actuator is served only on the internal management
+                        // port (management.server.port); on the public port these paths have no
+                        // handler and answer 404.
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/health/**",
+                                "/actuator/info", "/actuator/prometheus").permitAll()
                         // WebSocket handshake: authentication happens in the STOMP CONNECT frame
                         // (browsers cannot set headers on the handshake). See docs/REALTIME.md.
                         .requestMatchers(HttpMethod.GET, "/ws").permitAll()

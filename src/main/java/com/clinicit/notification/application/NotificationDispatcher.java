@@ -72,19 +72,22 @@ public class NotificationDispatcher {
     private final NotificationProperties properties;
     private final NotificationExecutor executor;
     private final Clock clock;
+    private final NotificationMetrics metrics;
 
     public NotificationDispatcher(
             JdbcTemplate jdbc,
             NotificationProviders providers,
             NotificationProperties properties,
             NotificationExecutor executor,
-            Clock clock
+            Clock clock,
+            NotificationMetrics metrics
     ) {
         this.jdbc = jdbc;
         this.providers = providers;
         this.properties = properties;
         this.executor = executor;
         this.clock = clock;
+        this.metrics = metrics;
     }
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
@@ -101,7 +104,8 @@ public class NotificationDispatcher {
 
     /** Sends every due PENDING notification. Returns how many were attempted. */
     public int retryDue(Instant now) {
-        jdbc.update(FAIL_EXHAUSTED, Timestamp.from(now), Timestamp.from(now));
+        int exhausted = jdbc.update(FAIL_EXHAUSTED, Timestamp.from(now), Timestamp.from(now));
+        for (int i = 0; i < exhausted; i++) metrics.failed("unknown", "ATTEMPTS_EXHAUSTED");
         List<Claimed> claimed = jdbc.query(CLAIM_DUE, Claimed::map,
                 Timestamp.from(now.plus(LEASE)), Timestamp.from(now), Timestamp.from(now));
         claimed.forEach(c -> deliver(c, now));
@@ -147,6 +151,7 @@ public class NotificationDispatcher {
                     where id = ? and status = 'PENDING'
                     """, attempt, Timestamp.from(now), Timestamp.from(now), provider.name(),
                     truncate(providerMessageId, 120), claimed.id);
+            metrics.sent(claimed.channel.name());
         } catch (NotificationDeliveryException e) {
             retryOrFail(claimed, attempt, e.getCode(), e.isRetryable(), now);
         } catch (RuntimeException e) {
@@ -167,6 +172,7 @@ public class NotificationDispatcher {
                 update notifications set attempts = ?, next_attempt_at = ?, last_error = ?, updated_at = ?
                 where id = ? and status = 'PENDING'
                 """, attempt, Timestamp.from(next), truncate(code, 300), Timestamp.from(now), claimed.id);
+        metrics.retryScheduled(claimed.channel.name(), code);
     }
 
     private void fail(Claimed claimed, int attempts, String code, Instant now) {
@@ -174,6 +180,7 @@ public class NotificationDispatcher {
                 update notifications set status = 'FAILED', attempts = ?, last_error = ?, updated_at = ?
                 where id = ? and status = 'PENDING'
                 """, attempts, truncate(code, 300), Timestamp.from(now), claimed.id);
+        metrics.failed(claimed.channel.name(), code);
     }
 
     Duration backoff(int attemptsSoFar) {

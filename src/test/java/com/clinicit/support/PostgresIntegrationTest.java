@@ -46,6 +46,8 @@ import java.util.UUID;
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
+// Keep the Prometheus exporter on, as in production (Boot disables exporters in tests by default).
+@org.springframework.boot.test.autoconfigure.actuate.observability.AutoConfigureObservability(tracing = false)
 @ExtendWith(PostgresAvailableCondition.class)
 @Import(PostgresIntegrationTest.ClockConfig.class)
 public abstract class PostgresIntegrationTest {
@@ -71,6 +73,7 @@ public abstract class PostgresIntegrationTest {
         // A fake ML service that each test can script; it answers 503 unless told otherwise.
         registry.add("clinicit.prediction.ml-base-url", () -> FakeModelServer.get().baseUrl());
         registry.add("clinicit.prediction.timeout", () -> "PT0.3S");
+        registry.add("management.server.port", () -> "0"); // random internal actuator port
     }
 
     @TestConfiguration

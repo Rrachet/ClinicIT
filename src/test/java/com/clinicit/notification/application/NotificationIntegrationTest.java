@@ -328,7 +328,8 @@ class NotificationIntegrationTest extends PostgresIntegrationTest {
         };
         NotificationDispatcher onlyWhatsapp = new NotificationDispatcher(jdbc,
                 new NotificationProviders(List.of(whatsappOnly), properties), properties,
-                new NotificationExecutor(properties), clock);
+                new NotificationExecutor(properties), clock,
+                new NotificationMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), null));
 
         onlyWhatsapp.sendIfDue(id);
 
