@@ -15,6 +15,7 @@ All endpoints except `POST /api/v1/auth/login` and `GET /api/v1/health` require
 - POST /api/v1/users/{id}/disable       (admin) also revokes the user's tokens
 - POST /api/v1/doctors                  (admin) create doctor profile
 - GET  /api/v1/doctors
+- GET  /api/v1/clinic                   the caller's clinic, incl. its clinic-local `today`
 
 ## Patients
 
@@ -52,6 +53,15 @@ for the changes from the original sketch.
 - GET /api/v1/patient-status/{publicToken}
 
 Patient status endpoints must use non-guessable public tokens and must not expose unnecessary patient information.
+
+Appointment responses include `patientName`. Queue entry and board rows include `version`
+(same as `entryVersion` in real-time events) and `statusCode` (the patient's status-link code).
+
+## Patient status (public, no login)
+
+- GET  /api/v1/public/queue-status/{code}   token, current token, patients ahead, status,
+                                            clinic and doctor display name. No patient data.
+                                            404 for unknown codes and after the queue day.
 
 ## Real-time (WebSocket)
 
