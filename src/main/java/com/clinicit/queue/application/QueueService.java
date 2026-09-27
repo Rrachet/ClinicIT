@@ -172,7 +172,7 @@ public class QueueService {
         LocalDate today = clinicTime.today(doctor.getClinicId());
 
         List<QueueEntry> queue = entries.findByDoctorIdAndQueueDateOrderByTokenNumberAsc(doctorId, today);
-        Map<UUID, String> names = patientNames(queue);
+        Map<UUID, String> names = patientNames(doctor.getClinicId(), queue);
 
         return QueueBoardResponse.from(doctorId, today, queue, names);
     }
@@ -199,11 +199,11 @@ public class QueueService {
         history.queueChanged(appointment, entry, previous, actor, now);
     }
 
-    private Map<UUID, String> patientNames(List<QueueEntry> queue) {
+    private Map<UUID, String> patientNames(UUID clinicId, List<QueueEntry> queue) {
         List<UUID> appointmentIds = queue.stream().map(QueueEntry::getAppointmentId).toList();
-        Map<UUID, UUID> patientByAppointment = appointments.findAllById(appointmentIds).stream()
+        Map<UUID, UUID> patientByAppointment = appointments.findByClinicIdAndIdIn(clinicId, appointmentIds).stream()
                 .collect(Collectors.toMap(Appointment::getId, Appointment::getPatientId));
-        Map<UUID, String> nameByPatient = patients.findAllById(patientByAppointment.values()).stream()
+        Map<UUID, String> nameByPatient = patients.findByClinicIdAndIdIn(clinicId, patientByAppointment.values()).stream()
                 .collect(Collectors.toMap(Patient::getId, Patient::getFullName));
 
         return patientByAppointment.entrySet().stream()

@@ -80,7 +80,7 @@ public class NotificationService {
         List<Map<String, Object>> rows = jdbc.queryForList("""
                 select a.clinic_id, a.scheduled_at, p.phone, c.name as clinic_name, c.timezone
                 from appointments a
-                join patients p on p.id = a.patient_id
+                join patients p on p.id = a.patient_id and p.clinic_id = a.clinic_id
                 join clinics c on c.id = a.clinic_id
                 where a.id = ?
                 """, appointmentId);
@@ -166,8 +166,8 @@ public class NotificationService {
                 select q.id, q.clinic_id, q.appointment_id, q.token_number, q.status_code, q.queue_date,
                        p.phone, c.name as clinic_name, c.timezone
                 from queue_entries q
-                join appointments a on a.id = q.appointment_id
-                join patients p on p.id = a.patient_id
+                join appointments a on a.id = q.appointment_id and a.clinic_id = q.clinic_id
+                join patients p on p.id = a.patient_id and p.clinic_id = a.clinic_id
                 join clinics c on c.id = q.clinic_id
                 where q.id = ?
                 """, (rs, i) -> new EntryContext(

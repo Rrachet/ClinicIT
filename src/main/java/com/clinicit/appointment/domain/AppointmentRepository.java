@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -13,6 +14,8 @@ import java.util.UUID;
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
     Optional<Appointment> findByIdAndClinicId(UUID id, UUID clinicId);
+
+    List<Appointment> findByClinicIdAndIdIn(UUID clinicId, Collection<UUID> ids);
 
     /**
      * Row lock so concurrent status changes (e.g. cancel vs. arrive) cannot lose updates.

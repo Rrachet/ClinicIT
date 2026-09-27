@@ -59,7 +59,8 @@ public class PublicQueueStatusService {
 
         return new PublicQueueStatusResponse(
                 clinics.findById(entry.getClinicId()).map(Clinic::getName).orElse(null),
-                doctors.findById(entry.getDoctorId()).map(DoctorProfile::getDisplayName).orElse(null),
+                doctors.findByIdAndClinicId(entry.getDoctorId(), entry.getClinicId())
+                        .map(DoctorProfile::getDisplayName).orElse(null),
                 entry.getQueueDate(),
                 entry.getTokenNumber(),
                 entry.getStatus(),

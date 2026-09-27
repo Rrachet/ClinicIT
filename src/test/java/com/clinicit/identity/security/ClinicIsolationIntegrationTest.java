@@ -79,7 +79,17 @@ class ClinicIsolationIntegrationTest extends PostgresIntegrationTest {
     private List<MockHttpServletRequestBuilder> requestsForClinicBResources() {
         UUID entry = waitingEntryB.id();
         UUID appointment = confirmedB.getId();
+        UUID notification = jdbc.queryForObject(
+                "select id from notifications where clinic_id = ? limit 1", UUID.class, clinicB.getId());
+        String doctor = doctorB.getId().toString();
         return List.of(
+                // Phases 6-8: notifications, analytics (built on the operational history), wait estimates
+                post("/api/v1/notifications/{id}/retry", notification),
+                get("/api/v1/analytics/today").param("doctorId", doctor),
+                get("/api/v1/analytics/wait-times").param("doctorId", doctor),
+                get("/api/v1/analytics/queue").param("doctorId", doctor),
+                get("/api/v1/analytics/no-shows").param("doctorId", doctor),
+                get("/api/v1/queues/today/wait-estimates").param("doctorId", doctor),
                 get("/api/v1/patients/{id}", patientB.getId()),
                 get("/api/v1/appointments/{id}", appointment),
                 get("/api/v1/appointments/{id}", waitingEntryB.appointmentId()),
@@ -160,7 +170,11 @@ class ClinicIsolationIntegrationTest extends PostgresIntegrationTest {
                 get("/api/v1/appointments").param("date", TODAY.toString()),
                 get("/api/v1/appointments").param("date", TODAY.toString()).param("doctorId", doctorB.getId().toString()),
                 get("/api/v1/doctors"),
-                get("/api/v1/users"));
+                get("/api/v1/users"),
+                get("/api/v1/notifications").param("appointmentId", waitingEntryB.appointmentId().toString()),
+                get("/api/v1/analytics/today"),
+                get("/api/v1/analytics/doctors"),
+                get("/api/v1/analytics/no-shows"));
 
         for (MockHttpServletRequestBuilder listing : listings) {
             MockHttpServletResponse response = send(listing, adminA);
@@ -174,6 +188,53 @@ class ClinicIsolationIntegrationTest extends PostgresIntegrationTest {
         }
         assertThat(send(get("/api/v1/patients").param("name", "Clinic"), adminA).getContentAsString())
                 .contains("Asha Clinic-A");
+    }
+
+    @Test
+    void clinicBsHistoryNeverCountsInClinicAsAnalytics() throws Exception {
+        // Clinic B has a patient in the queue (history: joined); Clinic A has nothing.
+        assertThat(jdbc.queryForObject("select count(*) from operational_events where clinic_id = ?", Integer.class,
+                clinicB.getId())).isPositive();
+
+        String summary = send(get("/api/v1/analytics/today"), adminA).getContentAsString();
+        assertThat(summary).contains("\"patients\":0").contains("\"currentQueueLength\":0");
+        assertThat(send(get("/api/v1/notifications").param("appointmentId", waitingEntryB.appointmentId().toString()),
+                adminA).getContentAsString()).isEqualTo("[]");
+    }
+
+    /**
+     * The last line of defence: even code that bypassed the scoped services could not link
+     * one clinic's rows to another's, because every reference is a composite foreign key
+     * that includes clinic_id.
+     */
+    @Test
+    void theDatabaseRejectsCrossClinicReferences() {
+        UUID appointmentB = waitingEntryB.appointmentId();
+        List<Runnable> attempts = List.of(
+                () -> jdbc.update("""
+                        insert into appointments (id, clinic_id, patient_id, doctor_id, scheduled_at, status, created_at, updated_at)
+                        values (gen_random_uuid(), ?, ?, ?, now(), 'BOOKED', now(), now())""",
+                        clinicA.getId(), patientB.getId(), doctorA.getId()),
+                () -> jdbc.update("""
+                        insert into appointments (id, clinic_id, patient_id, doctor_id, scheduled_at, status, created_at, updated_at)
+                        values (gen_random_uuid(), ?, ?, ?, now(), 'BOOKED', now(), now())""",
+                        clinicA.getId(), patientA.getId(), doctorB.getId()),
+                () -> jdbc.update("""
+                        insert into operational_events (id, clinic_id, appointment_id, doctor_id, patient_id, event_type,
+                                                        previous_status, occurred_at)
+                        values (gen_random_uuid(), ?, ?, ?, ?, 'CANCELLED', 'BOOKED', now())""",
+                        clinicA.getId(), appointmentB, doctorA.getId(), patientA.getId()),
+                () -> jdbc.update("""
+                        insert into notifications (id, clinic_id, appointment_id, type, channel, recipient, body, status,
+                                                   dedupe_key, attempts, max_attempts, next_attempt_at, expires_at,
+                                                   created_at, updated_at)
+                        values (gen_random_uuid(), ?, ?, 'PATIENT_CALLED', 'SMS', 'x', 'x', 'PENDING', 'cross-clinic', 0, 1,
+                                now(), now(), now(), now())""",
+                        clinicA.getId(), appointmentB));
+        for (Runnable attempt : attempts) {
+            org.assertj.core.api.Assertions.assertThatThrownBy(attempt::run)
+                    .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+        }
     }
 
     @Test
