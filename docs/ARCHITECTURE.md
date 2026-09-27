@@ -39,7 +39,8 @@ Identity   Scheduling   Queue
 - notification: patient messages. Listens to appointment/queue domain events, records messages in the causing transaction, delivers after commit through a `NotificationProvider` port (see [NOTIFICATIONS.md](NOTIFICATIONS.md)); core services never depend on it
 - history: the immutable operational history (`operational_events`). The appointment and queue services append one event per transition inside the transition's transaction; nothing updates or deletes it (enforced by a database trigger)
 - analytics: read-only operational metrics computed in PostgreSQL from that history, clinic-scoped and in clinic-local time (see [ANALYTICS.md](ANALYTICS.md))
-- ai: future model integration boundary
+- prediction: estimated waits (Phase 8). Builds features "as of now" from the operational history, calls the Python ML service (`ml/`, FastAPI) through the `WaitTimeModelClient` port with a short timeout, and falls back to a deterministic baseline. Read-only; the queue and appointment modules never call it (see [AI.md](AI.md))
+- ml/ (separate Python process): the trained wait-time model behind `POST /predict/wait-time`. It holds no business logic and has no database access
 
 ## Technology choices
 

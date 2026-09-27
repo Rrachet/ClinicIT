@@ -13,6 +13,7 @@ import type {
   QueueBoard,
   QueueEntry,
   User,
+  WaitEstimates,
   WaitTimes,
 } from "./types";
 
@@ -53,6 +54,8 @@ export function clinicApi(http: ApiClient) {
     completeConsultation: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/complete`),
     skip: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/skip`),
     requeue: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/requeue`),
+    waitEstimates: (doctorId: string) =>
+      http.get<WaitEstimates>("/api/v1/queues/today/wait-estimates", { query: { doctorId } }),
     queueNoShow: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/no-show`),
 
     notifications: (appointmentId: string) =>

@@ -1,7 +1,8 @@
 "use client";
 
-import type { Doctor } from "@/api/types";
+import type { Doctor, WaitEstimate } from "@/api/types";
 import { doctorView, type QueueState } from "@/queue/queueStore";
+import { approxMinutes, describeSource } from "@/queue/waitEstimate";
 import { Button } from "@/ui/Button";
 import { statusLabel } from "@/ui/format";
 
@@ -11,9 +12,12 @@ export function NowServing({
   queue,
   busyDoctorId,
   onCallNext,
+  estimates = {},
 }: {
   doctors: Doctor[];
   queue: QueueState;
+  /** Estimated waits by queue entry id; advisory, may be missing. */
+  estimates?: Record<string, WaitEstimate>;
   busyDoctorId: string | null;
   onCallNext: (doctor: Doctor) => void;
 }) {
@@ -43,11 +47,19 @@ export function NowServing({
                   <span className="muted">Queue empty</span>
                 ) : (
                   <ol className="next-list">
-                    {view.waiting.slice(0, 3).map((item) => (
-                      <li key={item.id}>
-                        <span className="token token-sm">#{item.tokenNumber}</span> {item.patientName ?? "…"}
-                      </li>
-                    ))}
+                    {view.waiting.slice(0, 3).map((item) => {
+                      const estimate = estimates[item.id];
+                      return (
+                        <li key={item.id}>
+                          <span className="token token-sm">#{item.tokenNumber}</span> {item.patientName ?? "…"}
+                          {estimate ? (
+                            <span className="estimate" title={describeSource(estimate)} data-testid={`estimate-${item.id}`}>
+                              Estimated wait: {approxMinutes(estimate.estimatedWaitMinutes)}
+                            </span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </div>

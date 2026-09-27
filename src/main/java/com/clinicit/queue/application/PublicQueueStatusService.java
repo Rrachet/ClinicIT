@@ -6,12 +6,12 @@ import com.clinicit.clinic.domain.ClinicRepository;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.prediction.application.WaitTimePredictionService;
 import com.clinicit.queue.api.PublicQueueStatusResponse;
 import com.clinicit.queue.domain.QueueEntry;
 import com.clinicit.queue.domain.QueueEntryRepository;
 import com.clinicit.queue.domain.QueueStatus;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Anonymous, read-only view of one queue entry, looked up by its unguessable status code.
@@ -19,24 +19,28 @@ import org.springframework.transaction.annotation.Transactional;
  * cannot be used to probe which codes existed.
  */
 @Service
-@Transactional(readOnly = true)
+// Deliberately not @Transactional: the estimate may wait on the ML service, and no database
+// connection should be held meanwhile. Each repository read is its own read-only transaction.
 public class PublicQueueStatusService {
 
     private final QueueEntryRepository entries;
     private final ClinicRepository clinics;
     private final DoctorProfileRepository doctors;
     private final ClinicTime clinicTime;
+    private final WaitTimePredictionService predictions;
 
     public PublicQueueStatusService(
             QueueEntryRepository entries,
             ClinicRepository clinics,
             DoctorProfileRepository doctors,
-            ClinicTime clinicTime
+            ClinicTime clinicTime,
+            WaitTimePredictionService predictions
     ) {
         this.entries = entries;
         this.clinics = clinics;
         this.doctors = doctors;
         this.clinicTime = clinicTime;
+        this.predictions = predictions;
     }
 
     public PublicQueueStatusResponse status(String code) {
@@ -60,7 +64,11 @@ public class PublicQueueStatusService {
                 entry.getTokenNumber(),
                 entry.getStatus(),
                 currentToken,
-                ahead
+                ahead,
+                predictions.forEntry(entry)
+                        .map(e -> new PublicQueueStatusResponse.EstimatedWait(
+                                e.estimatedWaitMinutes(), e.lowerBoundMinutes(), e.upperBoundMinutes()))
+                        .orElse(null)
         );
     }
 }

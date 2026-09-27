@@ -118,5 +118,6 @@ DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PAS
 - [Frontend](docs/FRONTEND.md)
 - [Patient notifications](docs/NOTIFICATIONS.md)
 - [Operational analytics](docs/ANALYTICS.md)
+- [AI: wait-time prediction](docs/AI.md) (the ML service is in [`ml/`](ml/README.md))
 
 > ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.

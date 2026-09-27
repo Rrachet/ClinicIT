@@ -10,6 +10,7 @@ import java.time.LocalDate;
  *
  * @param currentToken  token currently called or in consultation with this doctor, or null
  * @param patientsAhead waiting patients with a lower token; 0 unless this entry is WAITING
+ * @param estimatedWait approximate wait before being called, while WAITING; otherwise null
  */
 public record PublicQueueStatusResponse(
         String clinicName,
@@ -18,5 +19,9 @@ public record PublicQueueStatusResponse(
         int tokenNumber,
         QueueStatus status,
         Integer currentToken,
-        long patientsAhead
-) {}
+        long patientsAhead,
+        EstimatedWait estimatedWait
+) {
+    /** A range, never a promise. Operational only: says nothing about the patient's care. */
+    public record EstimatedWait(int estimatedWaitMinutes, int lowerBoundMinutes, int upperBoundMinutes) {}
+}

@@ -25,6 +25,8 @@ frontend/src/
   realtime/   queueFeed.ts    the one STOMP client: read-only, token in CONNECT, reconnects
   queue/      queueStore.ts   PURE queue state + the realtime rules (no React)
               useLiveQueue.ts wires REST boards + WebSocket events into queueStore
+              waitEstimate.ts, useWaitEstimates.ts  estimated waits: wording, and a debounced
+                              refetch only when a doctor's queue materially changes
   reception/  ReceptionConsole, NowServing, AppointmentTable, NewAppointmentPanel,
               actions.ts (buttons per status), workflows.ts (book / walk-in)
   doctor/     DoctorConsole
@@ -92,7 +94,8 @@ available to copy as a fallback.
   the staff WebSocket.
 - **What it can't do:** see names, see other patients, or act on the queue. The code stops working after the
   queue day.
-- **Wait time:** the backend doesn't provide an estimated wait yet, so none is shown.
+- **Wait time:** an estimated range ("17–31 min") while waiting, with a note that it is an estimate, not an
+  appointment time (Phase 8, [AI.md](AI.md)).
 
 ## API gaps closed for Phase 5 (smallest backend changes)
 
@@ -108,7 +111,6 @@ endpoints.
 
 **Known gaps, not built:**
 - **Search by phone.** The backend only searches by name. A phone search is a small, useful future change.
-- **Estimated wait time.** Needs consultation-duration history (Phase 7/8).
 - **Admin screens.** Beyond analytics (`/admin`, Phase 7), an admin uses the reception console; creating users and
   doctors is API-only for now.
 
@@ -161,6 +163,7 @@ npm run typecheck && npm run lint
 | `reception/ReceptionConsole.test.tsx` | Queue rendering; own clinic topic only; live updates; call-next; backend refusal messages; confirm dialogs; 403; retryable load failure |
 | `doctor/DoctorConsole.test.tsx` | Own topic and board only; live call; start/complete; 403; socket auth error signs out |
 | `admin/*.test.ts(x)` | Analytics formatting (no data is "—"); KPIs, doctor and hourly tables as returned; day and doctor filters; retry; admins only |
+| `queue/waitEstimate.test.ts` | Wait-estimate wording ("~23 min", "17–31 min", never "~0 min") and when the queue signature changes |
 | `patient/PatientStatus.test.tsx` | Wording; "You're next"; no Authorization header; invalid-link state |
 
 Breaking any of the three realtime rules makes these tests fail. I checked that by removing each one in turn.
@@ -181,4 +184,5 @@ tested by mistake.
 | `vertical-slice` | Receptionist and doctor sign in → register patient → book → confirm → arrive → join → call next → doctor's screen updates live (no reload) → start → complete → reception sees it live |
 | `workflows` | Walk-in check-in, with the patient following on a phone (anonymous, polling, no staff calls) through "You're next" and "It's your turn" · skip, back in queue, no-show and cancel, with confirmations · no-show for a confirmed patient who never came · a doctor sees only their own queue · role gating, wrong password, and sign-out revoking the token on the server |
 | `analytics` | A walk-in booked and called at reception, then completed, shows up in the admin's dashboard for that doctor · receptionists have no Analytics link and are redirected from `/admin` |
+| `wait-estimates` | The real ML service answers with its model; reception and the patient see estimates that update as the queue moves |
 | `visual-review` | Opt-in (`CAPTURE_SCREENSHOTS=1`): screenshots of all screens for review |

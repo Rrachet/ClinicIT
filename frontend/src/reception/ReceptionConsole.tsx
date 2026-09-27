@@ -5,6 +5,8 @@ import type { Appointment, Doctor } from "@/api/types";
 import { useAuth, useSession } from "@/auth/AuthProvider";
 import { itemForAppointment } from "@/queue/queueStore";
 import { useLiveQueue } from "@/queue/useLiveQueue";
+import { useWaitEstimates } from "@/queue/useWaitEstimates";
+import { queueSignature } from "@/queue/waitEstimate";
 import { AppHeader } from "@/ui/AppHeader";
 import { ConfirmDialog, type ConfirmRequest } from "@/ui/ConfirmDialog";
 import { ErrorBanner, Notice } from "@/ui/Feedback";
@@ -50,6 +52,12 @@ export function ReceptionConsole() {
     destination: clinic ? `/topic/clinic/${session.user.clinicId}/queue` : null,
     onChange: scheduleRefresh,
   });
+
+  const signatures = useMemo(
+    () => Object.fromEntries(doctorIds.map((id) => [id, queueSignature(live.queue, id)])),
+    [doctorIds, live.queue],
+  );
+  const estimates = useWaitEstimates(api, live.loaded ? signatures : {});
 
   async function run(appointment: Appointment, action: ReceptionAction) {
     const key = `${appointment.id}:${action.key}`;
@@ -117,6 +125,7 @@ export function ReceptionConsole() {
             queue={live.queue}
             busyDoctorId={busyKey?.startsWith("call:") ? busyKey.slice(5) : null}
             onCallNext={callNext}
+            estimates={estimates}
           />
         )}
 

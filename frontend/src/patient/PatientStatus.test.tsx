@@ -17,6 +17,7 @@ const base: PublicQueueStatus = {
   status: "WAITING",
   currentToken: 23,
   patientsAhead: 3,
+  estimatedWait: { estimatedWaitMinutes: 23, lowerBoundMinutes: 17, upperBoundMinutes: 31 },
 };
 
 describe("statusMessage", () => {
@@ -48,6 +49,29 @@ describe("PatientStatus page", () => {
     expect(screen.getByTestId("patient-current")).toHaveTextContent("#23");
     expect(screen.getByRole("heading", { name: "3 patients ahead of you" })).toBeInTheDocument();
     expect(api.calls[0].authorization).toBeUndefined();
+  });
+
+  it("shows the estimated wait as a range, and says it is an estimate", async () => {
+    api.route("GET /api/v1/public/queue-status/code-estimate-1234", () => ({ body: base }));
+    renderWithAuth(<PatientStatus code="code-estimate-1234" />);
+
+    expect(await screen.findByTestId("patient-estimate")).toHaveTextContent("17–31 min");
+    expect(screen.getByText("Estimated wait")).toBeInTheDocument();
+    expect(screen.getByText(/not an appointment time/)).toBeInTheDocument();
+  });
+
+  it("shows no estimate when there is none or the patient has been called", async () => {
+    api.route("GET /api/v1/public/queue-status/code-no-estimate-1", () => ({ body: { ...base, estimatedWait: null } }));
+    renderWithAuth(<PatientStatus code="code-no-estimate-1" />);
+    await screen.findByTestId("patient-token");
+    expect(screen.queryByText("Estimated wait")).not.toBeInTheDocument();
+  });
+
+  it("drops the estimate once the patient is called", async () => {
+    api.route("GET /api/v1/public/queue-status/code-called-12345", () => ({ body: { ...base, status: "CALLED" } }));
+    renderWithAuth(<PatientStatus code="code-called-12345" />);
+    await screen.findByTestId("patient-token");
+    expect(screen.queryByTestId("patient-estimate")).not.toBeInTheDocument();
   });
 
   it("makes 'You're next' unmistakable", async () => {

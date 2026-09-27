@@ -32,6 +32,7 @@ test("capture reception, doctor, patient and analytics screens", async ({ browse
   const card = reception.getByRole("article", { name: `Queue for ${state.doctorName}` });
   await card.getByRole("button", { name: /^Call #/ }).click();
   await expect(card.getByTestId(`current-token-${state.doctorId}`)).not.toHaveText("—");
+  await expect(card.getByText(/Estimated wait/).first()).toBeVisible();
   await reception.screenshot({ path: `${out}/reception.png`, fullPage: true });
 
   const doctor = await (await browser.newContext({ viewport: { width: 1440, height: 900 } })).newPage();

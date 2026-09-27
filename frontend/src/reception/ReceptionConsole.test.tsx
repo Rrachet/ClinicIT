@@ -15,6 +15,7 @@ vi.mock("@stomp/stompjs", async () => ({ Client: (await import("@/test/fakeStomp
 describe("ReceptionConsole", () => {
   let api: ReturnType<typeof fakeApi>;
   let appointments: Appointment[];
+  let estimateStatus: number;
 
   beforeEach(() => {
     FakeStompClient.reset();
@@ -27,9 +28,23 @@ describe("ReceptionConsole", () => {
       .route("GET /api/v1/clinic", () => ({ body: CLINIC }))
       .route("GET /api/v1/doctors", () => ({ body: [SHARMA, MEHTA] }))
       .route("GET /api/v1/appointments", () => ({ body: appointments }));
-    // Boards differ per doctor, so they are served here by doctorId.
+    estimateStatus = 200;
+    // Boards and wait estimates differ per doctor, so they are served here by doctorId.
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
       const url = new URL(String(input));
+      if (url.pathname === "/api/v1/queues/today/wait-estimates") {
+        const doctorId = url.searchParams.get("doctorId")!;
+        api.calls.push({ method: "GET", path: url.pathname + url.search, body: undefined, authorization: undefined });
+        if (estimateStatus !== 200) return new Response(JSON.stringify({ status: estimateStatus, message: "down" }), { status: estimateStatus });
+        const entries =
+          doctorId === SHARMA.id
+            ? [
+                { queueEntryId: "qa", tokenNumber: 7, estimatedWaitMinutes: 23, lowerBoundMinutes: 17, upperBoundMinutes: 31, source: "MODEL", modelVersion: "wait-random-forest-abc", fallbackReason: null },
+                { queueEntryId: "qb", tokenNumber: 8, estimatedWaitMinutes: 41, lowerBoundMinutes: 30, upperBoundMinutes: 55, source: "BASELINE", modelVersion: "baseline-v1", fallbackReason: "ML_UNAVAILABLE" },
+              ]
+            : [];
+        return new Response(JSON.stringify({ doctorId, queueDate: CLINIC.today, entries }), { status: 200 });
+      }
       if (url.pathname === "/api/v1/queues/today") {
         const doctorId = url.searchParams.get("doctorId");
         api.calls.push({ method: "GET", path: url.pathname + url.search, body: undefined, authorization: undefined });
@@ -53,6 +68,46 @@ describe("ReceptionConsole", () => {
     await waitFor(() => expect(screen.getByRole("article", { name: "Queue for Dr. Sharma" })).toHaveTextContent("#7"));
     return FakeStompClient.latest();
   }
+
+  it("shows each waiting patient's estimated wait next to them in the queue", async () => {
+    await open();
+    const sharma = screen.getByRole("article", { name: "Queue for Dr. Sharma" });
+
+    expect(await within(sharma).findByText("Estimated wait: ~23 min", {}, { timeout: 3000 })).toBeInTheDocument();
+    expect(within(sharma).getByText("Estimated wait: ~41 min")).toHaveAttribute("title", expect.stringContaining("Rough estimate"));
+    expect(within(sharma).getByText("Estimated wait: ~23 min")).toHaveAttribute("title", expect.stringContaining("17–31 min"));
+  });
+
+  it("refetches estimates once after a burst of queue changes, not per event", async () => {
+    const client = await open();
+    act(() => client.connect());
+    await screen.findByText("Estimated wait: ~23 min", {}, { timeout: 3000 });
+    const before = api.calls.filter((c) => c.path.startsWith("/api/v1/queues/today/wait-estimates")).length;
+
+    act(() => {
+      client.emit(event({ queueEntryId: "qa", appointmentId: "a", entryVersion: 1, tokenNumber: 7, status: "CALLED" }));
+      client.emit(event({ queueEntryId: "qa", appointmentId: "a", entryVersion: 2, tokenNumber: 7, status: "IN_CONSULTATION", type: "PATIENT_STARTED_CONSULTATION" }));
+      client.emit(event({ queueEntryId: "qb", appointmentId: "b", entryVersion: 1, tokenNumber: 8, status: "SKIPPED", type: "PATIENT_SKIPPED" }));
+    });
+
+    // One debounced reload covering both doctors.
+    await waitFor(
+      () => expect(api.calls.filter((c) => c.path.startsWith("/api/v1/queues/today/wait-estimates")).length).toBe(before + 2),
+      { timeout: 3000 },
+    );
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    expect(api.calls.filter((c) => c.path.startsWith("/api/v1/queues/today/wait-estimates")).length).toBe(before + 2);
+  });
+
+  it("works normally without estimates when they cannot be loaded", async () => {
+    estimateStatus = 503;
+    await open();
+    await waitFor(() => expect(api.calls.some((c) => c.path.startsWith("/api/v1/queues/today/wait-estimates"))).toBe(true), { timeout: 3000 });
+
+    expect(screen.queryByText(/Estimated wait/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Call #7" })).toBeEnabled();
+  });
 
   it("renders today's appointments and each doctor's queue with large tokens", async () => {
     await open();

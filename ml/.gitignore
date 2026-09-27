@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# Trained artifacts are rebuilt with `python -m clinicit_ml.train` (see README); not committed.
+models/
+data/*.csv
