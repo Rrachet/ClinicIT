@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
@@ -58,6 +59,7 @@ public class WaitTimePredictionService {
     private final WaitTimeModelClient model;
     private final PredictionProperties properties;
     private final JdbcTemplate jdbc;
+    private final PredictionMetrics metrics;
 
     private final Map<UUID, Cached> cache = new ConcurrentHashMap<>();
     private volatile Instant modelRetryAfter = Instant.MIN;
@@ -71,7 +73,8 @@ public class WaitTimePredictionService {
             WaitTimeFeatureBuilder featureBuilder,
             WaitTimeModelClient model,
             PredictionProperties properties,
-            JdbcTemplate jdbc
+            JdbcTemplate jdbc,
+            PredictionMetrics metrics
     ) {
         this.entries = entries;
         this.doctors = doctors;
@@ -80,6 +83,7 @@ public class WaitTimePredictionService {
         this.model = model;
         this.properties = properties;
         this.jdbc = jdbc;
+        this.metrics = metrics;
     }
 
     /** Estimates for everyone waiting for one doctor today. Doctors may only ask about themselves. */
@@ -127,6 +131,7 @@ public class WaitTimePredictionService {
                 missing.add(entry);
             }
         }
+        metrics.cache(waiting.size() - missing.size(), missing.size());
         if (missing.isEmpty()) return result;
 
         List<WaitTimeFeatures> rows = missing.stream()
@@ -158,15 +163,21 @@ public class WaitTimePredictionService {
             unavailable = "ML_DISABLED";
         } else if (now.isBefore(modelRetryAfter)) {
             unavailable = "ML_UNAVAILABLE";
+            metrics.backoffSkip();
         } else {
+            long started = System.nanoTime();
             try {
                 response = model.predict(rows);
                 if (!isValid(response, rows.size())) {
                     log.warn("Wait-time model returned an invalid response; using the baseline");
+                    metrics.mlRequest("invalid_prediction", Duration.ofNanos(System.nanoTime() - started));
                     unavailable = "INVALID_PREDICTION";
                     response = null;
+                } else {
+                    metrics.mlRequest("success", Duration.ofNanos(System.nanoTime() - started));
                 }
             } catch (ModelUnavailableException e) {
+                metrics.mlRequest(e.kind().name().toLowerCase(), Duration.ofNanos(System.nanoTime() - started));
                 // No request or patient data in the log: only what failed.
                 log.warn("Wait-time model unavailable ({}); using the baseline for {}", e.getMessage(),
                         properties.failureBackoff());
@@ -179,6 +190,7 @@ public class WaitTimePredictionService {
         for (int i = 0; i < rows.size(); i++) {
             if (response == null) {
                 estimates.add(BaselineWaitTime.estimate(rows.get(i), unavailable));
+                metrics.estimate("BASELINE", unavailable);
                 continue;
             }
             Prediction p = response.predictions().get(i);
@@ -189,9 +201,13 @@ public class WaitTimePredictionService {
                         Math.min((int) Math.floor(p.lowerBoundMinutes()), estimate),
                         Math.max((int) Math.ceil(p.upperBoundMinutes()), estimate),
                         WaitTimeEstimate.Source.MODEL, response.modelVersion(), null));
+                metrics.estimate("MODEL", null);
             } else {
                 // The service declined to use its model for this row (e.g. too little history).
-                estimates.add(BaselineWaitTime.estimate(rows.get(i), p.reason()));
+                // Only reasons ClinicIT knows are passed on; anything else becomes OTHER.
+                String reason = PredictionMetrics.knownReason(p.reason());
+                estimates.add(BaselineWaitTime.estimate(rows.get(i), reason));
+                metrics.estimate("BASELINE", reason);
             }
         }
         return estimates;

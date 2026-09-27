@@ -21,8 +21,18 @@ public interface WaitTimeModelClient {
 
     /** The service could not be reached, timed out or answered with an error. */
     class ModelUnavailableException extends RuntimeException {
-        public ModelUnavailableException(String message, Throwable cause) {
+
+        public enum Kind { DISABLED, TIMEOUT, UNREACHABLE, HTTP_ERROR, BAD_RESPONSE }
+
+        private final Kind kind;
+
+        public ModelUnavailableException(Kind kind, String message, Throwable cause) {
             super(message, cause);
+            this.kind = kind;
+        }
+
+        public Kind kind() {
+            return kind;
         }
     }
 }

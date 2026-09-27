@@ -2,12 +2,15 @@ package com.clinicit.prediction.infrastructure;
 
 import com.clinicit.prediction.application.PredictionProperties;
 import com.clinicit.prediction.application.WaitTimeModelClient;
+import com.clinicit.prediction.application.WaitTimeModelClient.ModelUnavailableException.Kind;
 import com.clinicit.prediction.domain.WaitTimeFeatures;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestClientResponseException;
 
 import java.net.http.HttpClient;
 import java.util.List;
@@ -37,7 +40,7 @@ public class HttpWaitTimeModelClient implements WaitTimeModelClient {
     @Override
     public ModelResponse predict(List<WaitTimeFeatures> rows) {
         if (!properties.mlEnabled()) {
-            throw new ModelUnavailableException("ML service not configured", null);
+            throw new ModelUnavailableException(Kind.DISABLED, "ML service not configured", null);
         }
         try {
             return http.post()
@@ -46,8 +49,23 @@ public class HttpWaitTimeModelClient implements WaitTimeModelClient {
                     .body(Map.of("schemaVersion", SCHEMA_VERSION, "instances", rows))
                     .retrieve()
                     .body(ModelResponse.class);
+        } catch (RestClientResponseException e) {
+            throw new ModelUnavailableException(Kind.HTTP_ERROR, "ML service answered HTTP " + e.getStatusCode().value(), e);
+        } catch (ResourceAccessException e) {
+            Kind kind = isTimeout(e) ? Kind.TIMEOUT : Kind.UNREACHABLE;
+            throw new ModelUnavailableException(kind, "ML service " + kind.name().toLowerCase(), e);
         } catch (RestClientException | IllegalArgumentException e) {
-            throw new ModelUnavailableException("ML service call failed: " + e.getClass().getSimpleName(), e);
+            throw new ModelUnavailableException(Kind.BAD_RESPONSE, "ML service response unreadable: "
+                    + e.getClass().getSimpleName(), e);
         }
+    }
+
+    static boolean isTimeout(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof java.net.http.HttpTimeoutException || t instanceof java.net.SocketTimeoutException) {
+                return true;
+            }
+        }
+        return false;
     }
 }
