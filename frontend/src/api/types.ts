@@ -149,3 +149,24 @@ export interface ApiErrorBody {
   message: string;
   path?: string;
 }
+
+export type NotificationType = "APPOINTMENT_CONFIRMED" | "PATIENT_JOINED_QUEUE" | "PATIENT_NEAR_TURN" | "PATIENT_CALLED";
+export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
+
+/** A message sent (or being sent) to a patient. recipient is masked by the server. */
+export interface PatientNotification {
+  id: string;
+  appointmentId: string;
+  type: NotificationType;
+  channel: "SMS" | "WHATSAPP" | "EMAIL";
+  recipient: string;
+  body: string;
+  status: NotificationStatus;
+  attempts: number;
+  maxAttempts: number;
+  lastError: string | null;
+  createdAt: string;
+  sentAt: string | null;
+  nextAttemptAt: string | null;
+  expiresAt: string;
+}

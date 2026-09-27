@@ -51,11 +51,10 @@ test("receptionist and doctor run one patient through the clinic, live", async (
   await expect(row.getByText("Arrived")).toBeVisible();
   await row.getByRole("button", { name: `Add to queue: ${patientName}` }).click();
 
-  // Joining shows the patient's status link.
-  const linkDialog = reception.getByRole("dialog", { name: /Queue link for token/ });
-  await expect(linkDialog).toBeVisible();
-  const tokenText = (await linkDialog.getByRole("heading").textContent())!.match(/#(\d+)/)![1];
-  await linkDialog.getByRole("button", { name: "Done" }).click();
+  // Joining issues a token; the queue link goes to the patient automatically (Phase 6).
+  const notice = reception.getByRole("status").filter({ hasText: "The queue link is being sent to them." });
+  await expect(notice).toContainText(`${patientName} is token #`);
+  const tokenText = (await notice.textContent())!.match(/token #(\d+)/)![1];
   await expect(row.getByText("Waiting")).toBeVisible();
   await expect(row.getByText(`#${tokenText}`)).toBeVisible();
 

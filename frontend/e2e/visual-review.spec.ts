@@ -18,9 +18,15 @@ test("capture reception, doctor and patient screens", async ({ browser }) => {
   let link = "";
   for (const [i, name] of names.entries()) {
     await bookFromReception(reception, { patientName: `${name} ${state.run}`, doctorName: i === 3 ? state.colleagueName : state.doctorName, checkInNow: true });
-    const dialog = reception.getByRole("dialog");
-    if (i === 2) link = await dialog.getByLabel("Patient status link").inputValue();
-    await dialog.getByRole("button", { name: "Done" }).click();
+    if (i === 2) {
+      const patientName = `${name} ${state.run}`;
+      await reception.getByRole("row").filter({ hasText: patientName }).getByRole("button", { name: `Messages: ${patientName}` }).click();
+      const dialog = reception.getByRole("dialog");
+      await expect(dialog.getByRole("listitem").filter({ hasText: "Queue link" })).toContainText("Sent");
+      link = await dialog.getByLabel(/Status link/).inputValue();
+      await reception.screenshot({ path: `${out}/messages.png` });
+      await dialog.getByRole("button", { name: "Done" }).click();
+    }
   }
   await bookFromReception(reception, { patientName: `Later Patient ${state.run}`, doctorName: state.doctorName, checkInNow: false, time: "18:30" });
   const card = reception.getByRole("article", { name: `Queue for ${state.doctorName}` });
