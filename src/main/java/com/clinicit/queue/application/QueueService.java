@@ -36,6 +36,9 @@ import java.util.stream.Collectors;
  * <p>Every mutation runs in one transaction that updates the queue
  * entry and its appointment together, so the two never disagree.
  *
+ * <p>Every change also writes an outbox event in the same transaction
+ * ({@link QueueEventRecorder}); clients are notified only after commit.
+ *
  * <p>Lock order, to rule out deadlocks: doctor → queue entry → appointment → token counter.
  * <ul>
  *   <li>join: appointment row, then the clinic/day token counter row</li>
@@ -52,6 +55,7 @@ public class QueueService {
     private final AppointmentRepository appointments;
     private final DoctorProfileRepository doctors;
     private final ClinicTime clinicTime;
+    private final QueueEventRecorder events;
     private final PatientRepository patients;
 
     public QueueService(
@@ -60,7 +64,8 @@ public class QueueService {
             AppointmentRepository appointments,
             DoctorProfileRepository doctors,
             PatientRepository patients,
-            ClinicTime clinicTime
+            ClinicTime clinicTime,
+            QueueEventRecorder events
     ) {
         this.entries = entries;
         this.tokens = tokens;
@@ -68,6 +73,7 @@ public class QueueService {
         this.doctors = doctors;
         this.patients = patients;
         this.clinicTime = clinicTime;
+        this.events = events;
     }
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
@@ -86,8 +92,10 @@ public class QueueService {
         }
 
         int token = tokens.nextToken(appointment.getClinicId(), today);
-        QueueEntry entry = entries.save(QueueEntry.join(appointment, today, token, clinicTime.instant()));
+        Instant now = clinicTime.instant();
+        QueueEntry entry = entries.save(QueueEntry.join(appointment, today, token, now));
         appointment.transitionTo(AppointmentStatus.WAITING);
+        events.record(entry, null, now);
 
         return QueueEntryResponse.from(entry);
     }
@@ -113,8 +121,10 @@ public class QueueService {
         QueueEntry next = entries.findNextWaitingForUpdate(doctorId, today)
                 .orElseThrow(() -> new BusinessRuleException("QUEUE_EMPTY", "No patients waiting"));
 
-        next.call(clinicTime.instant());
+        Instant now = clinicTime.instant();
+        next.call(now);
         syncAppointment(next);
+        events.record(next, QueueStatus.WAITING, now);
         return QueueEntryResponse.from(next);
     }
 
@@ -165,8 +175,11 @@ public class QueueService {
                 .orElseThrow(() -> new NotFoundException("Queue entry not found"));
         actor.requireAccessToDoctor(entry.getDoctorId());
 
-        transition.accept(entry, clinicTime.instant());
+        QueueStatus previous = entry.getStatus();
+        Instant now = clinicTime.instant();
+        transition.accept(entry, now);
         syncAppointment(entry);
+        events.record(entry, previous, now);
         return QueueEntryResponse.from(entry);
     }
 
