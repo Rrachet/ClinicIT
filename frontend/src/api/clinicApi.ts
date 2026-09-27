@@ -5,6 +5,7 @@ import type {
   Doctor,
   LoginResponse,
   Patient,
+  PatientNotification,
   PublicQueueStatus,
   QueueBoard,
   QueueEntry,
@@ -49,6 +50,11 @@ export function clinicApi(http: ApiClient) {
     skip: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/skip`),
     requeue: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/requeue`),
     queueNoShow: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/no-show`),
+
+    notifications: (appointmentId: string) =>
+      http.get<PatientNotification[]>("/api/v1/notifications", { query: { appointmentId } }),
+    retryNotification: (notificationId: string) =>
+      http.post<PatientNotification>(`/api/v1/notifications/${id(notificationId)}/retry`),
 
     publicStatus: (code: string) =>
       http.get<PublicQueueStatus>(`/api/v1/public/queue-status/${id(code)}`, { anonymous: true }),

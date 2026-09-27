@@ -146,9 +146,11 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
 
-        // Another transaction holds the lock on #1 (as a concurrent "skip" would).
+        // Another transaction holds the lock on #1 exactly as a concurrent "skip" does
+        // (Hibernate's PESSIMISTIC_WRITE is FOR NO KEY UPDATE, which still lets foreign-key
+        // checks from other transactions, e.g. notification inserts, proceed).
         Future<?> holder = pool.submit(() -> tx.executeWithoutResult(status -> {
-            jdbc.queryForList("select id from queue_entries where id = ? for update", first.id());
+            jdbc.queryForList("select id from queue_entries where id = ? for no key update", first.id());
             locked.countDown();
             try {
                 release.await(10, TimeUnit.SECONDS);

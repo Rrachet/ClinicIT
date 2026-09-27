@@ -21,7 +21,7 @@ export function AppointmentTable({
   queue: QueueState;
   busyKey: string | null;
   onAction: (appointment: Appointment, action: ReceptionAction) => void;
-  onShowLink: (statusCode: string, token: number) => void;
+  onShowLink: (appointmentId: string, statusCode: string, token: number) => void;
 }) {
   if (appointments.length === 0) {
     return <EmptyState title="No appointments today yet" hint="Book one with the form on the right." />;
@@ -72,8 +72,13 @@ export function AppointmentTable({
                     </Button>
                   ))}
                   {item?.statusCode && (item.status === "WAITING" || item.status === "CALLED") ? (
-                    <Button size="sm" variant="ghost" onClick={() => onShowLink(item.statusCode!, item.tokenNumber)}>
-                      Patient link
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => onShowLink(appointment.id, item.statusCode!, item.tokenNumber)}
+                      aria-label={`Messages: ${appointment.patientName ?? "patient"}`}
+                    >
+                      Messages
                     </Button>
                   ) : null}
                 </div>

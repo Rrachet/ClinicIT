@@ -64,6 +64,9 @@ public abstract class PostgresIntegrationTest {
         // Background jobs are invoked directly by the tests that need them.
         registry.add("clinicit.scheduling.enabled", () -> "false");
         registry.add("clinicit.cors.allowed-origins", () -> FRONTEND_ORIGIN);
+        // Deliver notifications inline after commit so tests can assert on them directly.
+        registry.add("clinicit.notifications.async-delivery", () -> "false");
+        registry.add("clinicit.notifications.status-link-base-url", () -> FRONTEND_ORIGIN);
     }
 
     @TestConfiguration
@@ -91,7 +94,7 @@ public abstract class PostgresIntegrationTest {
     void resetDatabase() {
         clock.set(NOW);
         jdbc.execute("""
-                truncate table queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
+                truncate table notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
                 """);
     }

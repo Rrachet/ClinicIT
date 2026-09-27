@@ -13,7 +13,7 @@ import { useAsync } from "@/ui/useAsync";
 import { AppointmentTable } from "./AppointmentTable";
 import { NewAppointmentPanel } from "./NewAppointmentPanel";
 import { NowServing } from "./NowServing";
-import { StatusLinkDialog } from "./StatusLinkDialog";
+import { StatusLinkDialog, type LinkTarget } from "./StatusLinkDialog";
 import { perform, type ReceptionAction } from "./actions";
 
 /** "Today's Clinic": the front desk's single working screen. */
@@ -23,7 +23,7 @@ export function ReceptionConsole() {
   const [actionError, setActionError] = useState<unknown>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [pending, setPending] = useState<{ appointment: Appointment; action: ReceptionAction } | null>(null);
-  const [link, setLink] = useState<{ code: string; token: number } | null>(null);
+  const [link, setLink] = useState<LinkTarget | null>(null);
   const [doctorFilter, setDoctorFilter] = useState<string>("all");
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -57,8 +57,8 @@ export function ReceptionConsole() {
     setActionError(null);
     try {
       const result = await perform(api, action.key, appointment, itemForAppointment(live.queue, appointment.id));
-      if (action.key === "join" && result && "statusCode" in result) {
-        setLink({ code: result.statusCode, token: result.tokenNumber });
+      if (action.key === "join" && result && "tokenNumber" in result) {
+        setNotice(`${appointment.patientName ?? "Patient"} is token #${result.tokenNumber}. The queue link is being sent to them.`);
       }
       reloadAppointments();
       if (action.key === "join") await live.reload();
@@ -142,7 +142,7 @@ export function ReceptionConsole() {
               queue={live.queue}
               busyKey={busyKey}
               onAction={onAction}
-              onShowLink={(code, token) => setLink({ code, token })}
+              onShowLink={(appointmentId, code, token) => setLink({ appointmentId, code, token })}
             />
           </section>
 
@@ -155,7 +155,9 @@ export function ReceptionConsole() {
                 reloadAppointments();
                 if (result.queueEntry) {
                   void live.reload();
-                  setLink({ code: result.queueEntry.statusCode, token: result.queueEntry.tokenNumber });
+                  setNotice(
+                    `${result.appointment.patientName ?? "Patient"} is token #${result.queueEntry.tokenNumber}. The queue link is being sent to them.`,
+                  );
                 } else {
                   setNotice(`Booked ${result.appointment.patientName ?? "patient"}`);
                 }
@@ -171,7 +173,7 @@ export function ReceptionConsole() {
         onCancel={() => setPending(null)}
         onConfirm={() => pending && void run(pending.appointment, pending.action)}
       />
-      <StatusLinkDialog link={link} onClose={() => setLink(null)} />
+      <StatusLinkDialog api={api} link={link} onClose={() => setLink(null)} />
     </div>
   );
 }

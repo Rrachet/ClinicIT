@@ -188,6 +188,9 @@ Doctors can read any patient in their clinic by id. That is the one clinic-wide 
   `Cache-Control: no-store`.
 - **Referrers:** the frontend sends `Referrer-Policy: no-referrer`, so the code is never leaked in a Referer header.
 - **Tests:** they check that the code grants nothing else, for example it doesn't work as a bearer token.
+- **How patients get the code:** from Phase 6 it is sent to the patient's phone in the "checked in" message
+  (docs/NOTIFICATIONS.md). Message bodies use fixed templates with no clinical data, phone numbers are masked for
+  staff and never logged, and message rows are purged after 30 days.
 
 ## Error responses
 
