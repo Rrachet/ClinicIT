@@ -9,6 +9,7 @@ import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.InvalidStateTransitionException;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.history.application.LifecycleHistory;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
@@ -37,7 +38,8 @@ import java.util.stream.Collectors;
  * entry and its appointment together, so the two never disagree.
  *
  * <p>Every change also writes an outbox event in the same transaction
- * ({@link QueueEventRecorder}); clients are notified only after commit.
+ * ({@link QueueEventRecorder}); clients are notified only after commit. It is also
+ * appended to the permanent operational history ({@link LifecycleHistory}).
  *
  * <p>Lock order, to rule out deadlocks: doctor → queue entry → appointment → token counter.
  * <ul>
@@ -57,6 +59,7 @@ public class QueueService {
     private final ClinicTime clinicTime;
     private final QueueEventRecorder events;
     private final PatientRepository patients;
+    private final LifecycleHistory history;
 
     public QueueService(
             QueueEntryRepository entries,
@@ -65,7 +68,8 @@ public class QueueService {
             DoctorProfileRepository doctors,
             PatientRepository patients,
             ClinicTime clinicTime,
-            QueueEventRecorder events
+            QueueEventRecorder events,
+            LifecycleHistory history
     ) {
         this.entries = entries;
         this.tokens = tokens;
@@ -74,6 +78,7 @@ public class QueueService {
         this.patients = patients;
         this.clinicTime = clinicTime;
         this.events = events;
+        this.history = history;
     }
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
@@ -94,7 +99,9 @@ public class QueueService {
         int token = tokens.nextToken(appointment.getClinicId(), today);
         Instant now = clinicTime.instant();
         QueueEntry entry = entries.save(QueueEntry.join(appointment, today, token, now));
+        AppointmentStatus previous = appointment.getStatus();
         appointment.transitionTo(AppointmentStatus.WAITING);
+        history.queueChanged(appointment, entry, previous, actor, now);
         events.record(entry, null, now);
 
         return QueueEntryResponse.from(entry);
@@ -123,7 +130,7 @@ public class QueueService {
 
         Instant now = clinicTime.instant();
         next.call(now);
-        syncAppointment(next);
+        syncAppointment(actor, next, now);
         events.record(next, QueueStatus.WAITING, now);
         return QueueEntryResponse.from(next);
     }
@@ -178,15 +185,18 @@ public class QueueService {
         QueueStatus previous = entry.getStatus();
         Instant now = clinicTime.instant();
         transition.accept(entry, now);
-        syncAppointment(entry);
+        syncAppointment(actor, entry, now);
         events.record(entry, previous, now);
         return QueueEntryResponse.from(entry);
     }
 
-    private void syncAppointment(QueueEntry entry) {
+    /** Mirrors the entry's new status onto its appointment and records it in the operational history. */
+    private void syncAppointment(Actor actor, QueueEntry entry, Instant now) {
         Appointment appointment = appointments.findByIdAndClinicIdForUpdate(entry.getAppointmentId(), entry.getClinicId())
                 .orElseThrow(() -> new IllegalStateException("Queue entry without appointment"));
+        AppointmentStatus previous = appointment.getStatus();
         appointment.transitionTo(entry.getStatus().toAppointmentStatus());
+        history.queueChanged(appointment, entry, previous, actor, now);
     }
 
     private Map<UUID, String> patientNames(List<QueueEntry> queue) {

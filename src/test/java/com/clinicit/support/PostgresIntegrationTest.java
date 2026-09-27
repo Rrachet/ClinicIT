@@ -94,7 +94,7 @@ public abstract class PostgresIntegrationTest {
     void resetDatabase() {
         clock.set(NOW);
         jdbc.execute("""
-                truncate table notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
+                truncate table operational_events, notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
                 """);
     }

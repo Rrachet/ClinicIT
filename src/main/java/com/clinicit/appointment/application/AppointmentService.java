@@ -10,6 +10,7 @@ import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.history.application.LifecycleHistory;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
@@ -32,19 +33,22 @@ public class AppointmentService {
     private final DoctorProfileRepository doctors;
     private final ClinicTime clinicTime;
     private final ApplicationEventPublisher events;
+    private final LifecycleHistory history;
 
     public AppointmentService(
             AppointmentRepository repository,
             PatientRepository patients,
             DoctorProfileRepository doctors,
             ClinicTime clinicTime,
-            ApplicationEventPublisher events
+            ApplicationEventPublisher events,
+            LifecycleHistory history
     ) {
         this.repository = repository;
         this.patients = patients;
         this.doctors = doctors;
         this.clinicTime = clinicTime;
         this.events = events;
+        this.history = history;
     }
 
     public AppointmentResponse create(Actor actor, CreateAppointmentRequest request) {
@@ -62,7 +66,9 @@ public class AppointmentService {
         appointment.setScheduledAt(request.scheduledAt());
         appointment.setReasonSummary(request.reasonSummary());
 
-        return AppointmentResponse.from(repository.save(appointment), patient.getFullName());
+        Appointment saved = repository.save(appointment);
+        history.booked(saved, actor, clinicTime.instant());
+        return AppointmentResponse.from(saved, patient.getFullName());
     }
 
     @Transactional(readOnly = true)
@@ -121,14 +127,19 @@ public class AppointmentService {
                     "Cannot mark a no-show before the appointment time");
         }
 
-        appointment.transitionTo(AppointmentStatus.NO_SHOW);
-        return respond(appointment);
+        return respond(apply(actor, appointment, AppointmentStatus.NO_SHOW));
     }
 
     private AppointmentResponse transition(Actor actor, UUID id, AppointmentStatus target) {
-        Appointment appointment = lockForTransition(actor, id);
+        return respond(apply(actor, lockForTransition(actor, id), target));
+    }
+
+    /** Changes the status and records it in the operational history, in this transaction. */
+    private Appointment apply(Actor actor, Appointment appointment, AppointmentStatus target) {
+        AppointmentStatus previous = appointment.getStatus();
         appointment.transitionTo(target);
-        return respond(appointment);
+        history.appointmentChanged(appointment, previous, actor, clinicTime.instant());
+        return appointment;
     }
 
     private Appointment lockForTransition(Actor actor, UUID id) {

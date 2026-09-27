@@ -144,5 +144,60 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
         assertThat(jdbc.queryForObject(
                 "select last_token from queue_token_counters where clinic_id = ?", Integer.class, clinic.getId()))
                 .as("counter matches issued tokens").isEqualTo(tokens.size());
+
+        assertHistoryConsistent(clinic);
+    }
+
+    /** The operational history is a complete, gap-free record of what the racing workers did. */
+    private void assertHistoryConsistent(Clinic clinic) {
+        assertThat(jdbc.queryForObject("""
+                select count(*) from queue_entries q
+                where q.clinic_id = ?
+                  and (select count(*) from operational_events e where e.queue_entry_id = q.id) <> q.version + 1
+                """, Integer.class, clinic.getId()))
+                .as("one event per committed transition (the join plus one per version bump)").isZero();
+
+        assertThat(jdbc.queryForObject("""
+                select count(*) from queue_entries q
+                where q.clinic_id = ?
+                  and (select count(*) from operational_events e
+                       where e.queue_entry_id = q.id and e.event_type = 'WAITING') <> 1
+                """, Integer.class, clinic.getId()))
+                .as("exactly one WAITING (joined) event per entry").isZero();
+
+        assertThat(jdbc.queryForObject("""
+                with ordered as (
+                    select previous_status, occurred_at,
+                           lag(case event_type when 'REQUEUED' then 'WAITING' else event_type end)
+                               over (partition by appointment_id order by seq) as status_before,
+                           lag(occurred_at) over (partition by appointment_id order by seq) as before_at
+                    from operational_events where clinic_id = ?
+                )
+                select count(*) from ordered
+                where previous_status is distinct from coalesce(status_before, 'ARRIVED')
+                   or occurred_at < before_at
+                """, Integer.class, clinic.getId()))
+                .as("each event starts where the previous one ended, in time order").isZero();
+
+        assertThat(jdbc.queryForObject("""
+                select count(*) from appointments a
+                join lateral (
+                    select case event_type when 'REQUEUED' then 'WAITING' else event_type end as status_after
+                    from operational_events e where e.appointment_id = a.id
+                    order by seq desc limit 1
+                ) last on true
+                where a.clinic_id = ? and last.status_after <> a.status
+                """, Integer.class, clinic.getId()))
+                .as("the latest event matches every appointment's current status").isZero();
+
+        assertThat(jdbc.queryForObject("""
+                select coalesce(sum(case when event_type in ('WAITING', 'REQUEUED') then 1
+                                         when previous_status = 'WAITING' then -1 else 0 end), 0)
+                from operational_events where clinic_id = ?
+                """, Integer.class, clinic.getId()))
+                .as("queue length replayed from history equals the patients waiting now")
+                .isEqualTo(jdbc.queryForObject(
+                        "select count(*) from queue_entries where clinic_id = ? and status = 'WAITING'",
+                        Integer.class, clinic.getId()));
     }
 }
