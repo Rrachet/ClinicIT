@@ -79,8 +79,10 @@ appointment list, so appointment statuses stay in step.
 
 ## Patient status (no patient accounts)
 
-When a patient joins the queue, reception gets a link, `/status/{code}`. They can copy it into an SMS or WhatsApp
-message by hand; automatic sending comes with notifications in Phase 6.
+When a patient joins the queue they are **messaged the link automatically** (Phase 6,
+[NOTIFICATIONS.md](NOTIFICATIONS.md)). Reception sees a short notice, and each queued patient's **Messages** button
+shows what was sent, with its status and a Retry for failed messages. The link itself (`/status/{code}`) remains
+available to copy as a fallback.
 
 - **What the page shows:** token, the token now being served, patients ahead, status, and a clear "You're next"
   or "It's your turn".

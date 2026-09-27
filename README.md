@@ -71,6 +71,7 @@ Requirements: Java 21, Maven, Node 20.9+ and PostgreSQL.
 
 ```bash
 CLINICIT_CORS_ALLOWED_ORIGINS=http://localhost:3000 \
+CLINICIT_PUBLIC_APP_URL=http://localhost:3000 \
 CLINICIT_BOOTSTRAP_CLINIC_NAME="City Clinic" \
 CLINICIT_BOOTSTRAP_ADMIN_EMAIL=owner@cityclinic.example \
 CLINICIT_BOOTSTRAP_ADMIN_PASSWORD='choose-a-long-password' \
@@ -95,8 +96,9 @@ curl -s localhost:8080/api/v1/users -H "Authorization: Bearer $TOKEN" -H 'Conten
 cd frontend && cp .env.example .env.local && npm install && npm run dev
 ```
 
-Sign in as the receptionist (reception console) or the doctor (doctor console). Patients open the status link that
-reception gives them; they don't need an account.
+Sign in as the receptionist (reception console) or the doctor (doctor console). Patients are messaged their queue
+status link automatically when they check in; they don't need an account. By default the development notification
+provider records messages instead of sending them (see [docs/NOTIFICATIONS.md](docs/NOTIFICATIONS.md)).
 
 **4. Everything end to end** in a real browser, against a real database:
 
@@ -114,5 +116,6 @@ DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PAS
 - [Security: authentication, roles, clinic isolation](docs/SECURITY.md)
 - [Real-time queue (WebSocket)](docs/REALTIME.md)
 - [Frontend](docs/FRONTEND.md)
+- [Patient notifications](docs/NOTIFICATIONS.md)
 
 > ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.

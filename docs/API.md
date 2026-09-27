@@ -57,6 +57,14 @@ Patient status endpoints must use non-guessable public tokens and must not expos
 Appointment responses include `patientName`. Queue entry and board rows include `version`
 (same as `entryVersion` in real-time events) and `statusCode` (the patient's status-link code).
 
+## Notifications (Phase 6)
+
+Patients are messaged automatically (confirmation, queue link, nearly your turn, your turn).
+See [NOTIFICATIONS.md](NOTIFICATIONS.md).
+
+- GET  /api/v1/notifications?appointmentId=   (front desk) messages for one appointment; recipient masked
+- POST /api/v1/notifications/{id}/retry       (front desk) retry a FAILED message
+
 ## Patient status (public, no login)
 
 - GET  /api/v1/public/queue-status/{code}   token, current token, patients ahead, status,
