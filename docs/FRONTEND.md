@@ -1,6 +1,6 @@
 # Frontend (Phase 5)
 
-A Next.js app in `frontend/` with three role-specific experiences. It talks directly to the Spring Boot REST API
+A Next.js app in `frontend/` with role-specific experiences. It talks directly to the Spring Boot REST API
 and the STOMP WebSocket; it has no server-side logic of its own.
 
 | Screen | Route | Who | Live updates |
@@ -8,6 +8,7 @@ and the STOMP WebSocket; it has no server-side logic of its own.
 | Today's Clinic (reception console) | `/reception` | RECEPTIONIST, ADMIN | clinic WebSocket topic |
 | My Queue (doctor console) | `/doctor` | DOCTOR | own doctor topic |
 | Patient queue status | `/status/{code}` | anyone holding the link, no login | polls a public endpoint every 15 s |
+| Clinic analytics | `/admin` | ADMIN | refreshes every minute ([ANALYTICS.md](ANALYTICS.md)) |
 | Sign in | `/login` | — | — |
 
 ## Structure
@@ -28,6 +29,7 @@ frontend/src/
               actions.ts (buttons per status), workflows.ts (book / walk-in)
   doctor/     DoctorConsole
   patient/    PatientStatus, statusMessage.ts
+  admin/      AnalyticsDashboard, analyticsView.ts (pure formatting)
   ui/         Button, ConfirmDialog, Feedback (error/empty/notice), StatusBadge, AppHeader, format, useAsync
   app/        thin route files only
 ```
@@ -48,7 +50,7 @@ header to its CONNECT frame.
 - the token's `expiresAt` passes. The user is sent to `/login?reason=expired`.
 
 **The frontend does not authorize anything.** Role routing only chooses a screen: ADMIN and RECEPTIONIST go to
-`/reception`, DOCTOR to `/doctor`, and anyone else is redirected. Every request is still authorized by the
+`/reception`, DOCTOR to `/doctor`, and anyone else is redirected. Only ADMIN may open `/admin` (analytics). Every request is still authorized by the
 backend, including roles, clinic scoping and the doctor-owns-queue rule. The screens simply show its 403/404
 answers. The clinic is never chosen by the client: topic paths use `clinicId` from the signed-in user, and the
 server re-checks it.
@@ -107,7 +109,8 @@ endpoints.
 **Known gaps, not built:**
 - **Search by phone.** The backend only searches by name. A phone search is a small, useful future change.
 - **Estimated wait time.** Needs consultation-duration history (Phase 7/8).
-- **Admin screens.** An admin uses the reception console; creating users and doctors is API-only for now.
+- **Admin screens.** Beyond analytics (`/admin`, Phase 7), an admin uses the reception console; creating users and
+  doctors is API-only for now.
 
 ## UX decisions
 
@@ -157,6 +160,7 @@ npm run typecheck && npm run lint
 | `auth/*.test.ts(x)` | Login and role routing; wrong credentials; expired session; guard redirects for signed-out users and the wrong role |
 | `reception/ReceptionConsole.test.tsx` | Queue rendering; own clinic topic only; live updates; call-next; backend refusal messages; confirm dialogs; 403; retryable load failure |
 | `doctor/DoctorConsole.test.tsx` | Own topic and board only; live call; start/complete; 403; socket auth error signs out |
+| `admin/*.test.ts(x)` | Analytics formatting (no data is "—"); KPIs, doctor and hourly tables as returned; day and doctor filters; retry; admins only |
 | `patient/PatientStatus.test.tsx` | Wording; "You're next"; no Authorization header; invalid-link state |
 
 Breaking any of the three realtime rules makes these tests fail. I checked that by removing each one in turn.
@@ -176,4 +180,5 @@ tested by mistake.
 |---|---|
 | `vertical-slice` | Receptionist and doctor sign in → register patient → book → confirm → arrive → join → call next → doctor's screen updates live (no reload) → start → complete → reception sees it live |
 | `workflows` | Walk-in check-in, with the patient following on a phone (anonymous, polling, no staff calls) through "You're next" and "It's your turn" · skip, back in queue, no-show and cancel, with confirmations · no-show for a confirmed patient who never came · a doctor sees only their own queue · role gating, wrong password, and sign-out revoking the token on the server |
+| `analytics` | A walk-in booked and called at reception, then completed, shows up in the admin's dashboard for that doctor · receptionists have no Analytics link and are redirected from `/admin` |
 | `visual-review` | Opt-in (`CAPTURE_SCREENSHOTS=1`): screenshots of all screens for review |

@@ -90,6 +90,20 @@ Avoid collecting sensitive medical data until a specific clinical-record require
 
 Later-phase fields should be intentionally scoped. Clinical data requires stronger access controls, auditability, retention rules, and privacy review.
 
+## OperationalEvent
+
+The immutable history of every appointment and queue transition (Phase 7, table `operational_events`, see
+[ANALYTICS.md](ANALYTICS.md)). It is append-only: a trigger rejects UPDATE and DELETE.
+
+Core fields:
+- id, seq
+- clinic_id, appointment_id, queue_entry_id (queue events), doctor_id, patient_id (ids only)
+- event_type: BOOKED, CONFIRMED, ARRIVED, WAITING (joined the queue), CALLED, IN_CONSULTATION, COMPLETED, CANCELLED, SKIPPED, REQUEUED, NO_SHOW
+- previous_status
+- occurred_at
+- actor_user_id
+- token_number, scheduled_at (minimal metadata)
+
 ## Notification
 
 Core fields:

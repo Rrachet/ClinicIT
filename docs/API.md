@@ -65,6 +65,18 @@ See [NOTIFICATIONS.md](NOTIFICATIONS.md).
 - GET  /api/v1/notifications?appointmentId=   (front desk) messages for one appointment; recipient masked
 - POST /api/v1/notifications/{id}/retry       (front desk) retry a FAILED message
 
+## Analytics (Phase 7)
+
+Deterministic figures computed from the immutable operational history. See [ANALYTICS.md](ANALYTICS.md).
+All GET, any staff role. The clinic comes from the session. `date` is clinic-local and defaults to today.
+Doctors get only their own figures; another doctor's `doctorId` returns 403.
+
+- GET  /api/v1/analytics/today?date=&doctorId=        day summary: patients, completed, avg/median wait, no-show rate, …
+- GET  /api/v1/analytics/wait-times?date=&doctorId=   avg/median/p90/max wait, and per hour of call
+- GET  /api/v1/analytics/doctors?date=                per doctor: patients handled, avg wait, avg consultation, utilization
+- GET  /api/v1/analytics/queue?date=&doctorId=        current queue length; per hour: joined, completed, waiting
+- GET  /api/v1/analytics/no-shows?from=&to=&doctorId= no-shows and cancellations for a range (≤ 366 days)
+
 ## Patient status (public, no login)
 
 - GET  /api/v1/public/queue-status/{code}   token, current token, patients ahead, status,

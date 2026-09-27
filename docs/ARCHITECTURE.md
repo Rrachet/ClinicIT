@@ -37,7 +37,8 @@ Identity   Scheduling   Queue
 - queue: token generation and state transitions
 - realtime: STOMP/WebSocket delivery of queue events and its security (see [REALTIME.md](REALTIME.md)); the queue module publishes through a port and never depends on it
 - notification: patient messages. Listens to appointment/queue domain events, records messages in the causing transaction, delivers after commit through a `NotificationProvider` port (see [NOTIFICATIONS.md](NOTIFICATIONS.md)); core services never depend on it
-- analytics: operational metrics
+- history: the immutable operational history (`operational_events`). The appointment and queue services append one event per transition inside the transition's transaction; nothing updates or deletes it (enforced by a database trigger)
+- analytics: read-only operational metrics computed in PostgreSQL from that history, clinic-scoped and in clinic-local time (see [ANALYTICS.md](ANALYTICS.md))
 - ai: future model integration boundary
 
 ## Technology choices
