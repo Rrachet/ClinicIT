@@ -55,6 +55,8 @@ public class SecurityConfig implements WebMvcConfigurer {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
+                        // Patient status by unguessable code; read-only, no patient data.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/queue-status/*").permitAll()
                         .requestMatchers("/error").permitAll()
                         // WebSocket handshake: authentication happens in the STOMP CONNECT frame
                         // (browsers cannot set headers on the handshake). See docs/REALTIME.md.

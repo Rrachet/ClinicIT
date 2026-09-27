@@ -10,13 +10,16 @@ import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.identity.domain.Actor;
+import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
@@ -42,7 +45,7 @@ public class AppointmentService {
     public AppointmentResponse create(Actor actor, CreateAppointmentRequest request) {
         // The appointment is booked in the caller's clinic; patient and doctor must be from it
         // too, otherwise one clinic could book (and later queue) another clinic's patients.
-        patients.findByIdAndClinicId(request.patientId(), actor.clinicId())
+        Patient patient = patients.findByIdAndClinicId(request.patientId(), actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Patient not found"));
         doctors.findByIdAndClinicId(request.doctorId(), actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
@@ -54,7 +57,7 @@ public class AppointmentService {
         appointment.setScheduledAt(request.scheduledAt());
         appointment.setReasonSummary(request.reasonSummary());
 
-        return AppointmentResponse.from(repository.save(appointment));
+        return AppointmentResponse.from(repository.save(appointment), patient.getFullName());
     }
 
     @Transactional(readOnly = true)
@@ -62,7 +65,7 @@ public class AppointmentService {
         Appointment appointment = repository.findByIdAndClinicId(id, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
         actor.requireAccessToDoctor(appointment.getDoctorId());
-        return AppointmentResponse.from(appointment);
+        return respond(appointment);
     }
 
     @Transactional(readOnly = true)
@@ -73,11 +76,15 @@ public class AppointmentService {
         var from = date.atStartOfDay();
         var to = date.plusDays(1).atStartOfDay();
 
-        return (doctorId == null
+        List<Appointment> found = doctorId == null
                 ? repository.findForClinicInRange(clinicId, from, to)
-                : repository.findForDoctorInRange(clinicId, doctorId, from, to))
+                : repository.findForDoctorInRange(clinicId, doctorId, from, to);
+
+        Map<UUID, String> names = patients.findAllById(found.stream().map(Appointment::getPatientId).toList())
                 .stream()
-                .map(AppointmentResponse::from)
+                .collect(Collectors.toMap(Patient::getId, Patient::getFullName));
+        return found.stream()
+                .map(appointment -> AppointmentResponse.from(appointment, names.get(appointment.getPatientId())))
                 .toList();
     }
 
@@ -108,13 +115,13 @@ public class AppointmentService {
         }
 
         appointment.transitionTo(AppointmentStatus.NO_SHOW);
-        return AppointmentResponse.from(appointment);
+        return respond(appointment);
     }
 
     private AppointmentResponse transition(Actor actor, UUID id, AppointmentStatus target) {
         Appointment appointment = lockForTransition(actor, id);
         appointment.transitionTo(target);
-        return AppointmentResponse.from(appointment);
+        return respond(appointment);
     }
 
     private Appointment lockForTransition(Actor actor, UUID id) {
@@ -128,5 +135,10 @@ public class AppointmentService {
                     "Appointment is in the queue; change it through its queue entry");
         }
         return appointment;
+    }
+
+    private AppointmentResponse respond(Appointment appointment) {
+        String patientName = patients.findById(appointment.getPatientId()).map(Patient::getFullName).orElse(null);
+        return AppointmentResponse.from(appointment, patientName);
     }
 }

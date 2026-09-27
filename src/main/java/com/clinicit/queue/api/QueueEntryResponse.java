@@ -7,6 +7,10 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.util.UUID;
 
+/**
+ * @param version     increases with every change; matches entryVersion in real-time events
+ * @param statusCode  code for the patient's public status link; give it only to the patient
+ */
 public record QueueEntryResponse(
         UUID id,
         UUID appointmentId,
@@ -19,7 +23,9 @@ public record QueueEntryResponse(
         Instant calledAt,
         Instant consultationStartedAt,
         Instant completedAt,
-        Instant skippedAt
+        Instant skippedAt,
+        long version,
+        String statusCode
 ) {
     public static QueueEntryResponse from(QueueEntry entry) {
         return new QueueEntryResponse(
@@ -34,7 +40,9 @@ public record QueueEntryResponse(
                 entry.getCalledAt(),
                 entry.getConsultationStartedAt(),
                 entry.getCompletedAt(),
-                entry.getSkippedAt()
+                entry.getSkippedAt(),
+                entry.getVersion(),
+                entry.getStatusCode()
         );
     }
 }

@@ -37,6 +37,10 @@ public class QueueEntry {
     @Column(name = "token_number", nullable = false, updatable = false)
     private Integer tokenNumber;
 
+    /** Unguessable code for the patient's public status page (see PublicQueueStatusService). */
+    @Column(name = "status_code", nullable = false, updatable = false, length = 32)
+    private String statusCode;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 32)
     private QueueStatus status;
@@ -79,6 +83,7 @@ public class QueueEntry {
         entry.doctorId = appointment.getDoctorId();
         entry.queueDate = queueDate;
         entry.tokenNumber = tokenNumber;
+        entry.statusCode = StatusCodes.next();
         entry.status = QueueStatus.WAITING;
         entry.checkedInAt = now;
         entry.createdAt = now;
@@ -130,6 +135,7 @@ public class QueueEntry {
     public UUID getDoctorId() { return doctorId; }
     public LocalDate getQueueDate() { return queueDate; }
     public Integer getTokenNumber() { return tokenNumber; }
+    public String getStatusCode() { return statusCode; }
     public QueueStatus getStatus() { return status; }
     public Instant getCheckedInAt() { return checkedInAt; }
     public Instant getCalledAt() { return calledAt; }

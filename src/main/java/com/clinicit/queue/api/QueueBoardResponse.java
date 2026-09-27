@@ -27,6 +27,8 @@ public record QueueBoardResponse(
     /**
      * @param patientsAhead for WAITING entries, how many WAITING patients hold a lower
      *                      token; null for any other status
+     * @param version       the entry's version; compare with entryVersion of real-time events
+     *                      so a board reload never overwrites a newer event (or vice versa)
      */
     public record Entry(
             UUID id,
@@ -36,7 +38,9 @@ public record QueueBoardResponse(
             String patientName,
             Integer patientsAhead,
             Instant checkedInAt,
-            Instant calledAt
+            Instant calledAt,
+            long version,
+            String statusCode
     ) {}
 
     public static QueueBoardResponse from(
@@ -64,7 +68,9 @@ public record QueueBoardResponse(
                     patientNameByAppointment.get(q.getAppointmentId()),
                     ahead,
                     q.getCheckedInAt(),
-                    q.getCalledAt()
+                    q.getCalledAt(),
+                    q.getVersion(),
+                    q.getStatusCode()
             ));
         }
 
