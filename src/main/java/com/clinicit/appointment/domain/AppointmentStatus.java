@@ -53,8 +53,4 @@ public enum AppointmentStatus {
     public boolean isQueueManaged() {
         return this == WAITING || this == CALLED || this == IN_CONSULTATION || this == SKIPPED;
     }
-
-    public boolean isTerminal() {
-        return allowedTargets().isEmpty();
-    }
 }
