@@ -15,6 +15,7 @@ export default async function globalSetup() {
   const token = login.accessToken as string;
 
   const doctor = await post(api, "/api/v1/doctors", { displayName: `Dr. Mehra ${run}`, specialization: "General" }, token);
+  const colleague = await post(api, "/api/v1/doctors", { displayName: `Dr. Rao ${run}`, specialization: "Paediatrics" }, token);
   const password = "e2e-staff-password-1";
   const doctorEmail = `doctor.${run}@e2e.clinicit.test`;
   const receptionistEmail = `desk.${run}@e2e.clinicit.test`;
@@ -23,7 +24,20 @@ export default async function globalSetup() {
 
   writeFileSync(
     join(__dirname, ".e2e-state.json"),
-    JSON.stringify({ run, password, doctorEmail, receptionistEmail, doctorId: doctor.id, doctorName: doctor.displayName }, null, 2),
+    JSON.stringify(
+      {
+        run,
+        password,
+        doctorEmail,
+        receptionistEmail,
+        doctorId: doctor.id,
+        doctorName: doctor.displayName,
+        colleagueId: colleague.id,
+        colleagueName: colleague.displayName,
+      },
+      null,
+      2,
+    ),
   );
 }
 
