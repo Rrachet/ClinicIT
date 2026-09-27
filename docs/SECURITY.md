@@ -124,7 +124,8 @@ a DOCTOR account needs `doctorProfileId`).
 
 ## Authorization: three layers
 
-1. **URL level: deny by default.** Only `POST /api/v1/auth/login` and `GET /api/v1/health` are public. Every
+1. **URL level: deny by default.** Only `POST /api/v1/auth/login`, `GET /api/v1/health` and the patient status
+   endpoint `GET /api/v1/public/queue-status/{code}` are public. Every
    other request, including unknown routes, needs a valid token, otherwise `401 UNAUTHORIZED`.
 2. **Role level.** Every endpoint declares who may call it, with `@AdminOnly`, `@FrontDesk` (ADMIN, RECEPTIONIST)
    or `@AnyStaff`. These are meta-annotations over `@PreAuthorize`. A call with the wrong role gets
@@ -174,6 +175,19 @@ SQL fix:
 
 Doctors can read any patient in their clinic by id. That is the one clinic-wide read a doctor has. Narrowing it to
 "patients with an appointment with me" is a possible later tightening.
+
+### Public patient status
+
+`GET /api/v1/public/queue-status/{code}` is the one public data endpoint.
+
+- **The code:** 128 random bits per queue entry, handed to that patient by reception. It is not guessable, and it
+  is only a read capability.
+- **What it returns:** token, current token, patients ahead, status, and the clinic's and doctor's display names.
+  It returns no patient name, phone number, appointment details or internal ids.
+- **Expiry and caching:** unknown codes and codes from past queue days both return 404. Responses are
+  `Cache-Control: no-store`.
+- **Referrers:** the frontend sends `Referrer-Policy: no-referrer`, so the code is never leaked in a Referer header.
+- **Tests:** they check that the code grants nothing else, for example it doesn't work as a bearer token.
 
 ## Error responses
 

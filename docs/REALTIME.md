@@ -126,6 +126,7 @@ contiguous. And it checks that applying the rules above reproduces the database 
 - **Heartbeats:** 10 s both ways. Messages from clients are limited to 16 KB. Slow consumers are dropped rather
   than buffered indefinitely.
 
+The reference client is `frontend/src/realtime/queueFeed.ts` together with `frontend/src/queue/queueStore.ts`.
 Example with `@stomp/stompjs`:
 
 ```js
@@ -159,8 +160,8 @@ listed below is denied.
   - A sweep every minute (`clinicit.realtime.revalidate-interval`) closes connections whose token has expired.
 - **Patient-facing screens do not get the staff feed.** There is no anonymous topic; an unauthenticated client
   cannot even connect. A waiting-room TV runs as a logged-in front-desk account on a doctor topic.
-- **A public patient status page is not built yet.** When it is, it will use its own sanitised feed keyed by a
-  non-guessable per-entry status token, never these topics.
+- **The public patient status page (Phase 5)** polls its own sanitised endpoint,
+  `GET /api/v1/public/queue-status/{code}`. It never touches these topics. See docs/FRONTEND.md.
 
 ## Scaling note
 

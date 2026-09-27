@@ -17,6 +17,14 @@ public interface QueueEntryRepository extends JpaRepository<QueueEntry, UUID> {
 
     Optional<QueueEntry> findByAppointmentId(UUID appointmentId);
 
+    Optional<QueueEntry> findByStatusCode(String statusCode);
+
+    Optional<QueueEntry> findFirstByDoctorIdAndQueueDateAndStatusIn(
+            UUID doctorId, LocalDate queueDate, Collection<QueueStatus> statuses);
+
+    long countByDoctorIdAndQueueDateAndStatusAndTokenNumberLessThan(
+            UUID doctorId, LocalDate queueDate, QueueStatus status, Integer tokenNumber);
+
     boolean existsByDoctorIdAndQueueDateAndStatusIn(
             UUID doctorId,
             LocalDate queueDate,

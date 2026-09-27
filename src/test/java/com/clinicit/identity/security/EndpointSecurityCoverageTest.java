@@ -26,7 +26,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
  */
 class EndpointSecurityCoverageTest extends PostgresIntegrationTest {
 
-    private static final Set<String> PUBLIC = Set.of("POST /api/v1/auth/login", "GET /api/v1/health");
+    private static final Set<String> PUBLIC = Set.of(
+            "POST /api/v1/auth/login", "GET /api/v1/health", "GET /api/v1/public/queue-status/{code}");
 
     @Autowired RequestMappingHandlerMapping mappings;
     @Autowired MockMvc mvc;
