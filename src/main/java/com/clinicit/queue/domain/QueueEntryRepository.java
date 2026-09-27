@@ -30,6 +30,9 @@ public interface QueueEntryRepository extends JpaRepository<QueueEntry, UUID> {
     /**
      * Next waiting patient for a doctor, locked.
      *
+     * FOR NO KEY UPDATE matches the lock Hibernate takes for PESSIMISTIC_WRITE and,
+     * unlike FOR UPDATE, does not block foreign-key checks from concurrent inserts.
+     *
      * SKIP LOCKED matters here: a WAITING row that is locked is being skipped by
      * another transaction. Without it, Postgres would wait, re-check the row after
      * the skip commits, find it no longer WAITING and, because of LIMIT 1, return
@@ -42,7 +45,7 @@ public interface QueueEntryRepository extends JpaRepository<QueueEntry, UUID> {
               and status = 'WAITING'
             order by token_number
             limit 1
-            for update skip locked
+            for no key update skip locked
             """, nativeQuery = true)
     Optional<QueueEntry> findNextWaitingForUpdate(UUID doctorId, LocalDate queueDate);
 }

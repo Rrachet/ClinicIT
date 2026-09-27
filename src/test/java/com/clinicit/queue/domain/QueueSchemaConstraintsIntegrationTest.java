@@ -67,6 +67,37 @@ class QueueSchemaConstraintsIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void appointmentCannotReferencePatientOfAnotherClinic() {
+        Clinic other = clinic("Other Clinic");
+        var foreignPatient = patient(other, "Foreign");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "update appointments set patient_id = ? where id = ?", foreignPatient.getId(), first.appointmentId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void appointmentCannotReferenceDoctorOfAnotherClinic() {
+        DoctorProfile foreignDoctor = doctor(clinic("Other Clinic"), "Dr. Foreign");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "update appointments set doctor_id = ? where id = ?", foreignDoctor.getId(), first.appointmentId()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
+    void queueEntryMustMatchItsAppointmentsDoctorAndClinic() {
+        DoctorProfile colleague = doctor(clinic, "Dr. Mehta");
+
+        assertThatThrownBy(() -> jdbc.update(
+                "update queue_entries set doctor_id = ? where id = ?", colleague.getId(), first.id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+        assertThatThrownBy(() -> jdbc.update(
+                "update queue_entries set clinic_id = ? where id = ?", clinic("Other Clinic").getId(), first.id()))
+                .isInstanceOf(DataIntegrityViolationException.class);
+    }
+
+    @Test
     void nonPositiveTokenIsRejected() {
         assertThatThrownBy(() -> jdbc.update("update queue_entries set token_number = 0 where id = ?", first.id()))
                 .isInstanceOf(DataIntegrityViolationException.class);
