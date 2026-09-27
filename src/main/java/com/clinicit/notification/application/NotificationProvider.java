@@ -18,6 +18,9 @@ public interface NotificationProvider {
      * Delivers one message. Implementations should pass {@link OutboundMessage#idempotencyKey()}
      * to the vendor when it supports idempotency, because delivery is at-least-once.
      *
+     * <p>Implementations must give up (timeout) well within the dispatcher's 2-minute claim
+     * lease; a call still running when the lease ends may be attempted again in parallel.
+     *
      * @return the vendor's message id (for support/tracing)
      * @throws NotificationDeliveryException when the message was not accepted
      */

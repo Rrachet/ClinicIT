@@ -25,9 +25,17 @@ import java.util.UUID;
  *   <li><b>Retries</b>: a poller picks up due PENDING rows (after failures, restarts, or
  *       a crash before the fast path ran). Delay doubles per attempt, capped.</li>
  * </ul>
- * Every attempt first <i>claims</i> the row with one atomic UPDATE (pushing its
- * next_attempt_at forward as a lease), so two senders never deliver the same row at once.
+ * Every attempt first <i>claims</i> the row with one atomic UPDATE that pushes its
+ * next_attempt_at forward as a lease <b>and counts the attempt</b>, so two senders never
+ * deliver the same row at once, and an attempt that never reports back (the process died,
+ * or the provider threw an Error) still counts: a message can be attempted at most
+ * {@code max_attempts} times, however the attempts end. A row whose last attempt never
+ * reported back is marked FAILED (ATTEMPTS_EXHAUSTED) once its lease runs out.
  * A message past its expiry is marked FAILED (EXPIRED) and never sent.
+ *
+ * <p>Delivery is at-least-once, not exactly-once: a crash after the vendor accepted a
+ * message but before it was marked SENT leads to one more attempt. Providers get the
+ * notification id as an idempotency key so vendors that support it can drop the duplicate.
  */
 @Component
 public class NotificationDispatcher {
@@ -36,21 +44,28 @@ public class NotificationDispatcher {
     private static final Duration LEASE = Duration.ofMinutes(2);
     private static final int BATCH = 50;
 
+    /** Claims one row and counts the attempt; {@code attempts} returned is this attempt's number. */
     private static final String CLAIM_ONE = """
-            update notifications set next_attempt_at = ?, updated_at = ?
-            where id = ? and status = 'PENDING' and next_attempt_at <= ?
+            update notifications set next_attempt_at = ?, attempts = attempts + 1, updated_at = ?
+            where id = ? and status = 'PENDING' and next_attempt_at <= ? and attempts < max_attempts
             returning id, channel, recipient, body, attempts, max_attempts, expires_at
             """;
 
     private static final String CLAIM_DUE = """
-            update notifications set next_attempt_at = ?, updated_at = ?
+            update notifications set next_attempt_at = ?, attempts = attempts + 1, updated_at = ?
             where id in (select id from notifications
-                         where status = 'PENDING' and next_attempt_at <= ?
+                         where status = 'PENDING' and next_attempt_at <= ? and attempts < max_attempts
                          order by next_attempt_at
                          limit %d
                          for update skip locked)
             returning id, channel, recipient, body, attempts, max_attempts, expires_at
             """.formatted(BATCH);
+
+    /** Rows whose final attempt never reported back (crash) and whose lease has run out. */
+    private static final String FAIL_EXHAUSTED = """
+            update notifications set status = 'FAILED', last_error = 'ATTEMPTS_EXHAUSTED', updated_at = ?
+            where status = 'PENDING' and next_attempt_at <= ? and attempts >= max_attempts
+            """;
 
     private final JdbcTemplate jdbc;
     private final NotificationProviders providers;
@@ -86,6 +101,7 @@ public class NotificationDispatcher {
 
     /** Sends every due PENDING notification. Returns how many were attempted. */
     public int retryDue(Instant now) {
+        jdbc.update(FAIL_EXHAUSTED, Timestamp.from(now), Timestamp.from(now));
         List<Claimed> claimed = jdbc.query(CLAIM_DUE, Claimed::map,
                 Timestamp.from(now.plus(LEASE)), Timestamp.from(now), Timestamp.from(now));
         claimed.forEach(c -> deliver(c, now));
@@ -111,16 +127,17 @@ public class NotificationDispatcher {
     }
 
     private void deliver(Claimed claimed, Instant now) {
+        // The claim counted this attempt; if nothing is actually sent, un-count it.
         if (!claimed.expiresAt.isAfter(now)) {
-            fail(claimed, claimed.attempts, "EXPIRED", now);
+            fail(claimed, claimed.attempts - 1, "EXPIRED", now);
             return;
         }
         NotificationProvider provider = providers.forChannel(claimed.channel).orElse(null);
         if (provider == null) {
-            fail(claimed, claimed.attempts, "NO_PROVIDER_FOR_" + claimed.channel, now);
+            fail(claimed, claimed.attempts - 1, "NO_PROVIDER_FOR_" + claimed.channel, now);
             return;
         }
-        int attempt = claimed.attempts + 1;
+        int attempt = claimed.attempts;
         try {
             String providerMessageId = provider.send(new OutboundMessage(
                     claimed.id.toString(), claimed.channel, claimed.recipient, claimed.body));
