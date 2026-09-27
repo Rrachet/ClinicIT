@@ -26,6 +26,20 @@ clinicit:
     max-failures-per-ip: 30
     # Purge of expired/revoked sessions and stale throttle rows.
     cleanup-interval: PT1H
+  notifications:
+    enabled: ${CLINICIT_NOTIFICATIONS_ENABLED:true}
+    # "development" records messages instead of sending them. A real SMS/WhatsApp/email
+    # provider is a NotificationProvider bean selected by this name (docs/NOTIFICATIONS.md).
+    provider: ${CLINICIT_NOTIFICATIONS_PROVIDER:development}
+    channel: ${CLINICIT_NOTIFICATIONS_CHANNEL:SMS}
+    # Public URL of the frontend; patients get {base}/status/{code}.
+    status-link-base-url: ${CLINICIT_PUBLIC_APP_URL:http://localhost:3000}
+    near-turn-threshold: 1
+    max-attempts: 5
+    retry-base-delay: PT30S
+    retry-max-delay: PT30M
+    poll-interval: PT10S
+    retention: P30D
   cors:
     # Comma-separated exact origins of the web frontend, e.g. https://app.example.com
     allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS:}

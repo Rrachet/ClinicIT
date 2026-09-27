@@ -3,6 +3,7 @@ package com.clinicit.appointment.application;
 import com.clinicit.appointment.api.AppointmentResponse;
 import com.clinicit.appointment.api.CreateAppointmentRequest;
 import com.clinicit.appointment.domain.Appointment;
+import com.clinicit.appointment.domain.AppointmentConfirmed;
 import com.clinicit.appointment.domain.AppointmentRepository;
 import com.clinicit.appointment.domain.AppointmentStatus;
 import com.clinicit.clinic.application.ClinicTime;
@@ -12,6 +13,7 @@ import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,17 +31,20 @@ public class AppointmentService {
     private final PatientRepository patients;
     private final DoctorProfileRepository doctors;
     private final ClinicTime clinicTime;
+    private final ApplicationEventPublisher events;
 
     public AppointmentService(
             AppointmentRepository repository,
             PatientRepository patients,
             DoctorProfileRepository doctors,
-            ClinicTime clinicTime
+            ClinicTime clinicTime,
+            ApplicationEventPublisher events
     ) {
         this.repository = repository;
         this.patients = patients;
         this.doctors = doctors;
         this.clinicTime = clinicTime;
+        this.events = events;
     }
 
     public AppointmentResponse create(Actor actor, CreateAppointmentRequest request) {
@@ -89,7 +94,9 @@ public class AppointmentService {
     }
 
     public AppointmentResponse confirm(Actor actor, UUID id) {
-        return transition(actor, id, AppointmentStatus.CONFIRMED);
+        AppointmentResponse confirmed = transition(actor, id, AppointmentStatus.CONFIRMED);
+        events.publishEvent(new AppointmentConfirmed(confirmed.id(), confirmed.clinicId()));
+        return confirmed;
     }
 
     public AppointmentResponse cancel(Actor actor, UUID id) {
