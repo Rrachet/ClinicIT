@@ -49,18 +49,29 @@ Core fields:
 - id
 - appointment_id
 - clinic_id
-- queue_date
+- doctor_id (copied from the appointment at join; the queue is served per doctor)
+- queue_date (clinic-local date)
 - token_number
 - status
 - checked_in_at
 - called_at
 - consultation_started_at
 - completed_at
+- skipped_at
 - created_at
 - updated_at
+- version (optimistic locking)
 
-Recommended constraint:
+Constraints:
 - UNIQUE(clinic_id, queue_date, token_number)
+- UNIQUE(appointment_id)
+- partial UNIQUE(doctor_id, queue_date) WHERE status IN ('CALLED', 'IN_CONSULTATION')
+- CHECK token_number > 0, CHECK status in the known set
+
+## QueueTokenCounter
+
+One row per clinic per day, `(clinic_id, queue_date) -> last_token`, incremented atomically when a patient
+joins. See [QUEUE_ENGINE.md](QUEUE_ENGINE.md).
 
 ## Patient
 

@@ -16,15 +16,22 @@ The exact routes will be finalized with the implementation, but the first API su
 - POST /api/v1/appointments/{id}/confirm
 - POST /api/v1/appointments/{id}/cancel
 - POST /api/v1/appointments/{id}/arrive
+- POST /api/v1/appointments/{id}/no-show
 
 ## Queue
 
-- GET /api/v1/queues/today?doctorId=
-- POST /api/v1/queues/{appointmentId}/join
-- POST /api/v1/queues/next/call
-- POST /api/v1/queues/{queueEntryId}/start
-- POST /api/v1/queues/{queueEntryId}/complete
-- POST /api/v1/queues/{queueEntryId}/skip
+Implemented in Phase 2. See [QUEUE_ENGINE.md](QUEUE_ENGINE.md) for semantics, error codes and the reasons
+for the changes from the original sketch.
+
+- POST /api/v1/queue-entries            (body: appointmentId) join the queue, issue token
+- GET  /api/v1/queue-entries/{id}
+- POST /api/v1/queue-entries/{id}/start
+- POST /api/v1/queue-entries/{id}/complete
+- POST /api/v1/queue-entries/{id}/skip
+- POST /api/v1/queue-entries/{id}/requeue
+- POST /api/v1/queue-entries/{id}/no-show
+- POST /api/v1/queues/call-next         (body: doctorId)
+- GET  /api/v1/queues/today?doctorId=
 
 ## Patient status
 

@@ -45,4 +45,27 @@ BOOKED -> CONFIRMED -> ARRIVED -> WAITING -> CALLED -> IN_CONSULTATION -> COMPLE
 
 Alternative terminal paths include CANCELLED, NO_SHOW, and SKIPPED.
 
+## Running tests
+
+```bash
+mvn test
+```
+
+Queue tests need real PostgreSQL (they rely on row locks, `SKIP LOCKED` and `ON CONFLICT`). They use
+Testcontainers when Docker is available, or an existing database:
+
+```bash
+CLINICIT_TEST_DB_URL=jdbc:postgresql://localhost:5432/clinicit_test mvn test
+```
+
+With neither available they are reported as skipped.
+
+## Design docs
+
+- [Product spec](docs/PRODUCT_SPEC.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Data model](docs/DATA_MODEL.md)
+- [API](docs/API.md)
+- [Queue engine](docs/QUEUE_ENGINE.md)
+
 > ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.
