@@ -3,7 +3,7 @@ package com.clinicit.queue.application;
 import com.clinicit.appointment.domain.Appointment;
 import com.clinicit.appointment.domain.AppointmentRepository;
 import com.clinicit.appointment.domain.AppointmentStatus;
-import com.clinicit.clinic.domain.ClinicRepository;
+import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
@@ -20,10 +20,8 @@ import com.clinicit.queue.domain.QueueTokenAllocator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -49,26 +47,23 @@ public class QueueService {
     private final QueueTokenAllocator tokens;
     private final AppointmentRepository appointments;
     private final DoctorProfileRepository doctors;
-    private final ClinicRepository clinics;
+    private final ClinicTime clinicTime;
     private final PatientRepository patients;
-    private final Clock clock;
 
     public QueueService(
             QueueEntryRepository entries,
             QueueTokenAllocator tokens,
             AppointmentRepository appointments,
             DoctorProfileRepository doctors,
-            ClinicRepository clinics,
             PatientRepository patients,
-            Clock clock
+            ClinicTime clinicTime
     ) {
         this.entries = entries;
         this.tokens = tokens;
         this.appointments = appointments;
         this.doctors = doctors;
-        this.clinics = clinics;
         this.patients = patients;
-        this.clock = clock;
+        this.clinicTime = clinicTime;
     }
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
@@ -81,13 +76,13 @@ public class QueueService {
             throw new InvalidStateTransitionException("appointment", appointment.getStatus(), AppointmentStatus.WAITING);
         }
 
-        LocalDate today = today(appointment.getClinicId());
+        LocalDate today = clinicTime.today(appointment.getClinicId());
         if (!appointment.getScheduledAt().toLocalDate().equals(today)) {
             throw new BusinessRuleException("NOT_TODAY", "Only today's appointments can join the queue");
         }
 
         int token = tokens.nextToken(appointment.getClinicId(), today);
-        QueueEntry entry = entries.save(QueueEntry.join(appointment, today, token, clock.instant()));
+        QueueEntry entry = entries.save(QueueEntry.join(appointment, today, token, clinicTime.instant()));
         appointment.transitionTo(AppointmentStatus.WAITING);
 
         return QueueEntryResponse.from(entry);
@@ -103,7 +98,7 @@ public class QueueService {
     public QueueEntryResponse callNext(UUID doctorId) {
         DoctorProfile doctor = doctors.findByIdForUpdate(doctorId)
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
-        LocalDate today = today(doctor.getClinicId());
+        LocalDate today = clinicTime.today(doctor.getClinicId());
 
         if (entries.existsByDoctorIdAndQueueDateAndStatusIn(doctorId, today, QueueStatus.ACTIVE)) {
             throw new BusinessRuleException("DOCTOR_BUSY",
@@ -113,7 +108,7 @@ public class QueueService {
         QueueEntry next = entries.findNextWaitingForUpdate(doctorId, today)
                 .orElseThrow(() -> new BusinessRuleException("QUEUE_EMPTY", "No patients waiting"));
 
-        next.call(clock.instant());
+        next.call(clinicTime.instant());
         syncAppointment(next);
         return QueueEntryResponse.from(next);
     }
@@ -150,7 +145,7 @@ public class QueueService {
     public QueueBoardResponse todayForDoctor(UUID doctorId) {
         DoctorProfile doctor = doctors.findById(doctorId)
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
-        LocalDate today = today(doctor.getClinicId());
+        LocalDate today = clinicTime.today(doctor.getClinicId());
 
         List<QueueEntry> queue = entries.findByDoctorIdAndQueueDateOrderByTokenNumberAsc(doctorId, today);
         Map<UUID, String> names = patientNames(queue);
@@ -162,7 +157,7 @@ public class QueueService {
         QueueEntry entry = entries.findByIdForUpdate(entryId)
                 .orElseThrow(() -> new NotFoundException("Queue entry not found"));
 
-        transition.accept(entry, clock.instant());
+        transition.accept(entry, clinicTime.instant());
         syncAppointment(entry);
         return QueueEntryResponse.from(entry);
     }
@@ -182,13 +177,5 @@ public class QueueService {
 
         return patientByAppointment.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> nameByPatient.get(e.getValue())));
-    }
-
-    /** "Today" is the clinic's local date, not the server's. */
-    private LocalDate today(UUID clinicId) {
-        ZoneId zone = clinics.findById(clinicId)
-                .map(clinic -> ZoneId.of(clinic.getTimezone()))
-                .orElseThrow(() -> new NotFoundException("Clinic not found"));
-        return LocalDate.now(clock.withZone(zone));
     }
 }

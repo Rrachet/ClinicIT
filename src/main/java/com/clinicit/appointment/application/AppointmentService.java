@@ -5,7 +5,9 @@ import com.clinicit.appointment.api.CreateAppointmentRequest;
 import com.clinicit.appointment.domain.Appointment;
 import com.clinicit.appointment.domain.AppointmentRepository;
 import com.clinicit.appointment.domain.AppointmentStatus;
+import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
+import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.patient.domain.PatientRepository;
 import org.springframework.stereotype.Service;
@@ -22,15 +24,18 @@ public class AppointmentService {
     private final AppointmentRepository repository;
     private final PatientRepository patients;
     private final DoctorProfileRepository doctors;
+    private final ClinicTime clinicTime;
 
     public AppointmentService(
             AppointmentRepository repository,
             PatientRepository patients,
-            DoctorProfileRepository doctors
+            DoctorProfileRepository doctors,
+            ClinicTime clinicTime
     ) {
         this.repository = repository;
         this.patients = patients;
         this.doctors = doctors;
+        this.clinicTime = clinicTime;
     }
 
     public AppointmentResponse create(CreateAppointmentRequest request) {
@@ -85,16 +90,40 @@ public class AppointmentService {
         return transition(id, AppointmentStatus.ARRIVED);
     }
 
-    /** Patient checked in but left before being queued. Queued patients go through the queue's no-show. */
+    /**
+     * Records a no-show for a patient who never reached the queue: either they never
+     * arrived (CONFIRMED, only once the appointment time has passed) or they checked in
+     * and left before joining (ARRIVED). Queued patients go through the queue's no-show.
+     */
     public AppointmentResponse markNoShow(UUID id) {
-        return transition(id, AppointmentStatus.NO_SHOW);
+        Appointment appointment = lockForTransition(id);
+
+        if (appointment.getStatus() == AppointmentStatus.CONFIRMED
+                && clinicTime.now(appointment.getClinicId()).isBefore(appointment.getScheduledAt())) {
+            throw new BusinessRuleException("TOO_EARLY",
+                    "Cannot mark a no-show before the appointment time");
+        }
+
+        appointment.transitionTo(AppointmentStatus.NO_SHOW);
+        return AppointmentResponse.from(appointment);
     }
 
     private AppointmentResponse transition(UUID id, AppointmentStatus target) {
+        Appointment appointment = lockForTransition(id);
+        appointment.transitionTo(target);
+        return AppointmentResponse.from(appointment);
+    }
+
+    private Appointment lockForTransition(UUID id) {
         Appointment appointment = repository.findByIdForUpdate(id)
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
 
-        appointment.transitionTo(target);
-        return AppointmentResponse.from(appointment);
+        // Once queued, the queue entry owns the status. Changing the appointment here
+        // (e.g. SKIPPED -> NO_SHOW) would leave the queue entry out of sync.
+        if (appointment.getStatus().isQueueManaged()) {
+            throw new BusinessRuleException("QUEUE_MANAGED",
+                    "Appointment is in the queue; change it through its queue entry");
+        }
+        return appointment;
     }
 }

@@ -9,7 +9,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -21,7 +20,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** The receptionist → doctor flow over HTTP, including the error contract. */
-@AutoConfigureMockMvc
 class QueueApiIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired MockMvc mvc;
@@ -127,6 +125,6 @@ class QueueApiIntegrationTest extends PostgresIntegrationTest {
 
         mvc.perform(post("/api/v1/appointments/{id}/cancel", appointment.getId()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("INVALID_STATE"));
+                .andExpect(jsonPath("$.code").value("QUEUE_MANAGED"));
     }
 }

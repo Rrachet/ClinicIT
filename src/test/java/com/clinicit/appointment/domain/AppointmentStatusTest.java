@@ -19,6 +19,7 @@ class AppointmentStatusTest {
             "BOOKED, CANCELLED",
             "CONFIRMED, ARRIVED",
             "CONFIRMED, CANCELLED",
+            "CONFIRMED, NO_SHOW",
             "ARRIVED, WAITING",
             "ARRIVED, NO_SHOW",
             "WAITING, CALLED",
@@ -37,6 +38,7 @@ class AppointmentStatusTest {
     @CsvSource({
             "BOOKED, ARRIVED",
             "BOOKED, WAITING",
+            "BOOKED, NO_SHOW",
             "CONFIRMED, WAITING",
             "ARRIVED, CANCELLED",
             "WAITING, IN_CONSULTATION",
@@ -56,6 +58,12 @@ class AppointmentStatusTest {
             assertThat(terminal.isTerminal()).isTrue();
             assertThat(terminal.allowedTargets()).isEmpty();
         }
+    }
+
+    @Test
+    void queueManagedStatusesAreExactlyTheQueueStates() {
+        assertThat(EnumSet.allOf(AppointmentStatus.class).stream().filter(AppointmentStatus::isQueueManaged))
+                .containsExactlyInAnyOrder(WAITING, CALLED, IN_CONSULTATION, SKIPPED);
     }
 
     @Test
