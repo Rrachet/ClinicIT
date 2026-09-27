@@ -3,3 +3,8 @@ target/
 .idea/
 .vscode/
 .DS_Store
+
+# Local environment files hold secrets; only the example is committed.
+.env
+.env.*
+!.env.example

@@ -1,0 +1,30 @@
+# Production profile: SPRING_PROFILES_ACTIVE=prod
+#
+# Nothing here has a default. Every value below must come from the environment, and
+# ProductionConfigurationCheck refuses to start with development credentials, a missing or
+# non-HTTPS CORS origin / public URL, or the development notification provider.
+# See .env.example and docs/OPERATIONS.md.
+spring:
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+
+server:
+  # Behind a load balancer/reverse proxy: honour X-Forwarded-For/-Proto only from internal
+  # proxy addresses (Tomcat RemoteIpValve), so client IPs used by login throttling cannot be
+  # spoofed by a client-supplied header.
+  forward-headers-strategy: native
+
+clinicit:
+  notifications:
+    provider: ${CLINICIT_NOTIFICATIONS_PROVIDER}
+    status-link-base-url: ${CLINICIT_PUBLIC_APP_URL}
+  cors:
+    allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS}
+
+logging:
+  structured:
+    format:
+      # One JSON object per line (Elastic Common Schema), including the request id.
+      console: ecs
