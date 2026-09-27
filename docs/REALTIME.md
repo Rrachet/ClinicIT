@@ -163,15 +163,21 @@ listed below is denied.
 - **The public patient status page (Phase 5)** polls its own sanitised endpoint,
   `GET /api/v1/public/queue-status/{code}`. It never touches these topics. See docs/FRONTEND.md.
 
-## Scaling note
+## Scaling boundary: one instance
 
-The in-memory broker delivers only to clients connected to the same application instance. ClinicIT runs as one
-instance today. Running several would need a shared fan-out:
+The in-memory broker delivers only to clients connected to the same application instance, so **ClinicIT is deployed
+as a single API instance**. With two instances today, a change committed on one would reach only that instance's
+screens, and a logout would close sockets on other instances only at the next minute-by-minute revalidation.
+
+To run several instances, replace the in-memory broker with a shared fan-out, and broadcast `SessionsRevoked` the same
+way:
 
 - Spring's STOMP broker relay to RabbitMQ or ActiveMQ (a configuration change in `WebSocketConfig`), or
-- PostgreSQL `LISTEN/NOTIFY` from the outbox.
+- PostgreSQL `LISTEN/NOTIFY` from the outbox, so every instance publishes every event to its own clients.
 
-The outbox and the event contract stay the same either way.
+The outbox and the event contract stay the same either way. Everything else (tokens, locks, sessions, outboxes,
+notification claiming) already lives in PostgreSQL. See [OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary).
+`clinicit_websocket_connections{state}` reports open and authenticated connections per instance.
 
 ## Tests
 

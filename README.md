@@ -30,6 +30,7 @@ There is no Redis, message broker or second database. PostgreSQL is the only sto
 | 6 | Patient notifications (provider-agnostic outbox) | [Notifications](docs/NOTIFICATIONS.md) |
 | 7 | Immutable operational history and analytics dashboard | [Analytics](docs/ANALYTICS.md) |
 | 8 | AI wait-time prediction (advisory, operational only) | [AI](docs/AI.md), [`ml/`](ml/README.md) |
+| 9 | CI/CD and production hardening: probes, metrics, safe configuration, reliability fixes | [Operations](docs/OPERATIONS.md), [Testing](docs/TESTING.md) |
 
 ## Core roles
 
@@ -57,6 +58,9 @@ cd ml && python3 -m venv .venv && .venv/bin/pip install -r requirements-dev.txt 
 # Frontend
 cd frontend && npm ci && npm test && npm run typecheck && npm run lint && npm run build
 ```
+
+CI (GitHub Actions, `.github/workflows/ci.yml`) runs all of these, plus the browser E2E, on every pull request and
+push to `main`, with PostgreSQL as a service container. Details: [docs/TESTING.md](docs/TESTING.md).
 
 The backend tests use the database in `CLINICIT_TEST_DB_URL` (its name must contain `test`, because every table
 is truncated). Without it they use Testcontainers when Docker is available. With neither, they are reported as
@@ -119,6 +123,12 @@ service, the API and the frontend, and seeds its own staff:
 DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PASSWORD=secret scripts/e2e.sh
 ```
 
+## Running in production
+
+Set `SPRING_PROFILES_ACTIVE=prod` and the variables in [`.env.example`](.env.example). The app refuses to start with
+missing or unsafe settings. Health probes and Prometheus metrics are on the internal port 8081. See
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
+
 ## Design docs
 
 - [Product spec](docs/PRODUCT_SPEC.md)
@@ -132,6 +142,8 @@ DB_URL=jdbc:postgresql://localhost:5432/clinicit_e2e DB_USERNAME=postgres DB_PAS
 - [Patient notifications](docs/NOTIFICATIONS.md)
 - [Operational analytics](docs/ANALYTICS.md)
 - [AI: wait-time prediction](docs/AI.md) (the ML service is in [`ml/`](ml/README.md))
+- [Operations and deployment](docs/OPERATIONS.md)
+- [Testing and CI](docs/TESTING.md)
 
 > ClinicIT is an operational system. Its one AI feature estimates waiting time from the state of the queue. It is
 > advisory and never diagnoses, prescribes, prioritises patients or makes clinical decisions (see

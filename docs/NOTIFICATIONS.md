@@ -81,11 +81,22 @@ for visit, a date of birth or anything clinical, and a test checks for each of t
 
 - **Retries:** the delay starts at 30 s and doubles per attempt, capped at 30 min. The poller runs every 10 s.
 - **Expiry:** a message that is no longer true is never sent. "Please go in now" an hour late would be harmful.
-- **No double sending:** every attempt first *claims* the row with one atomic `UPDATE … RETURNING`. That moves
-  `next_attempt_at` forward as a 2-minute lease, and the poller claims with `FOR UPDATE SKIP LOCKED`. The fast
-  path and the poller, or several app instances, never send the same row at the same time.
-- **At-least-once:** a crash after the vendor accepted a message but before it was marked SENT can resend it.
-  Providers receive the notification id as an idempotency key to pass to vendors that support it.
+- **No concurrent sending:** every attempt first *claims* the row with one atomic `UPDATE … RETURNING`. That moves
+  `next_attempt_at` forward as a 2-minute lease **and counts the attempt**, and the poller claims with
+  `FOR UPDATE SKIP LOCKED`. The fast path and the poller, or several app instances, never send the same row at the
+  same time.
+- **A crash cannot corrupt state or resend forever.** Because the attempt is counted when it is claimed, an attempt
+  that never reports back (the process died mid-send, or the provider threw an `Error`) still counts. The row simply
+  waits out its lease and is tried again, at most `max_attempts` times in all. A row whose final attempt never
+  reported back is marked `FAILED` with `ATTEMPTS_EXHAUSTED` once the lease ends. Every state change is a single
+  conditional `UPDATE` (`… where status = 'PENDING'`), so a late or duplicate result cannot overwrite a newer state.
+- **Delivery is at-least-once, not exactly-once.** A crash after the vendor accepted a message but before it was
+  marked SENT leads to one more attempt. Every provider receives the notification id as an **idempotency key**
+  (`OutboundMessage.idempotencyKey()`). A vendor that supports idempotency drops the duplicate, and the development
+  provider behaves the same way; a test proves the patient gets one message after such a crash. With a vendor that
+  does not support idempotency, a rare duplicate message is possible.
+- **Provider calls must time out well within the 2-minute lease.** A call still running when the lease ends may be
+  attempted again in parallel.
 - **Manual retry:** front desk can retry a FAILED message (`POST /api/v1/notifications/{id}/retry`), which gives it
   a fresh set of attempts. Retrying is refused once the message has expired.
 
@@ -112,14 +123,21 @@ status and a Retry button; the link remains available to copy as a fallback.
 | `…max-attempts` / `retry-base-delay` / `retry-max-delay` / `poll-interval` / `retention` | `5` / `PT30S` / `PT30M` / `PT10S` / `P30D` | |
 
 The **development provider** is the default. It records messages instead of sending them: the row is marked SENT
-with provider `development`, and the provider keeps the last 200 messages in memory. It logs a warning at startup
-so it is never mistaken for real delivery. `failNextSends(n)` simulates a vendor outage, which the tests use.
+with provider `development`, and the provider keeps the last 200 messages in memory. It has no network access, so it
+cannot reach a real phone. It logs a warning at startup so it is never mistaken for real delivery, and the `prod`
+profile refuses to start with it while notifications are enabled ([OPERATIONS.md](OPERATIONS.md)). Like vendors with
+idempotency keys, it does not deliver the same key twice. `failNextSends(n)` simulates a vendor outage and
+`crashNextSends(n, afterAccepting)` a sender dying mid-send; the tests use both.
+
+**Metrics:** `clinicit_notifications_deliveries_total{outcome=sent|retry|failed, channel, reason}` and the backlog gauge
+`clinicit_notifications_pending`.
 
 ## Adding a real provider
 
 1. Implement `NotificationProvider`: `name()`, `supports(channel)` and `send(OutboundMessage)`. The implementation
    should:
    - return the vendor's message id;
+   - give up (timeout) well within the 2-minute claim lease;
    - throw `NotificationDeliveryException(code, retryable)` when a message is not accepted, with
      `retryable = false` for permanent errors such as an invalid number;
    - pass `idempotencyKey()` to the vendor.
