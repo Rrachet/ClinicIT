@@ -13,6 +13,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 API_PORT="${API_PORT:-18080}"
 WEB_PORT="${WEB_PORT:-3000}"
 ML_PORT="${ML_PORT:-18000}"
+MANAGEMENT_PORT="${MANAGEMENT_PORT:-18081}"
 export E2E_ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-owner@e2e.clinicit.test}"
 export E2E_ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-e2e-admin-password-1}"
 export E2E_API_URL="http://localhost:${API_PORT}"
@@ -28,7 +29,7 @@ cleanup() { for pgid in "${groups[@]}"; do kill -TERM -- "-$pgid" 2>/dev/null ||
 trap cleanup EXIT
 
 port_free() { ! (echo >"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
-for port in "$API_PORT" "$WEB_PORT" "$ML_PORT"; do
+for port in "$API_PORT" "$WEB_PORT" "$ML_PORT" "$MANAGEMENT_PORT"; do
   if ! port_free "$port"; then
     echo "Port $port is already in use; stop whatever is running there first." >&2
     exit 1
@@ -57,6 +58,7 @@ echo "Building API…"
 (cd "$ROOT" && mvn -q -B -DskipTests package)
 echo "Starting API on :$API_PORT…"
 PORT="$API_PORT" \
+MANAGEMENT_PORT="$MANAGEMENT_PORT" \
 CLINICIT_ML_BASE_URL="$E2E_ML_URL" \
 CLINICIT_CORS_ALLOWED_ORIGINS="$E2E_BASE_URL" \
 CLINICIT_PUBLIC_APP_URL="$E2E_BASE_URL" \
@@ -65,7 +67,7 @@ CLINICIT_BOOTSTRAP_ADMIN_EMAIL="$E2E_ADMIN_EMAIL" \
 CLINICIT_BOOTSTRAP_ADMIN_PASSWORD="$E2E_ADMIN_PASSWORD" \
   setsid java -jar "$ROOT"/target/clinicit-*.jar >"$LOGS/api.log" 2>&1 &
 groups+=($!)
-wait_for "$E2E_API_URL/api/v1/health" "API"
+wait_for "http://localhost:$MANAGEMENT_PORT/actuator/health/readiness" "API (readiness)"
 
 echo "Building and starting frontend on :$WEB_PORT…"
 (cd "$ROOT/frontend" && NEXT_TELEMETRY_DISABLED=1 NEXT_PUBLIC_API_BASE_URL="$E2E_API_URL" npx next build >"$LOGS/web-build.log" 2>&1)
