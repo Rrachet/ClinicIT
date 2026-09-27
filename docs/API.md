@@ -77,6 +77,17 @@ Doctors get only their own figures; another doctor's `doctorId` returns 403.
 - GET  /api/v1/analytics/queue?date=&doctorId=        current queue length; per hour: joined, completed, waiting
 - GET  /api/v1/analytics/no-shows?from=&to=&doctorId= no-shows and cancellations for a range (≤ 366 days)
 
+## Wait-time estimates (Phase 8)
+
+Approximate, advisory waits before being called. See [AI.md](AI.md).
+
+- GET  /api/v1/queues/today/wait-estimates?doctorId=   (any staff; doctors: own queue) per waiting patient:
+                                                       estimatedWaitMinutes, lowerBoundMinutes, upperBoundMinutes,
+                                                       source (MODEL | BASELINE), modelVersion, fallbackReason
+
+The public queue status also returns `estimatedWait {estimatedWaitMinutes, lowerBoundMinutes, upperBoundMinutes}`
+while the patient is waiting (null otherwise).
+
 ## Patient status (public, no login)
 
 - GET  /api/v1/public/queue-status/{code}   token, current token, patients ahead, status,
