@@ -53,11 +53,17 @@ for the changes from the original sketch.
 
 Patient status endpoints must use non-guessable public tokens and must not expose unnecessary patient information.
 
-## Real-time events
+## Real-time (WebSocket)
 
-Future WebSocket events:
+STOMP over WebSocket at `/ws`; authenticate in the CONNECT frame with
+`Authorization: Bearer <token>`. Read-only: clients subscribe, they never send.
+Full contract, ordering rules and security: [REALTIME.md](REALTIME.md).
 
-- queue.updated
-- patient.called
-- appointment.updated
-- notification.created
+- SUBSCRIBE /topic/clinic/{clinicId}/queue                     (admin, receptionist of that clinic)
+- SUBSCRIBE /topic/clinic/{clinicId}/doctor/{doctorId}/queue   (front desk of that clinic, or that doctor)
+
+Event types: PATIENT_JOINED_QUEUE, PATIENT_CALLED, PATIENT_STARTED_CONSULTATION,
+PATIENT_COMPLETED, PATIENT_SKIPPED, PATIENT_REQUEUED, PATIENT_NO_SHOW. Events carry ids and
+queue state only (no patient data); load `GET /api/v1/queues/today` on connect/reconnect.
+
+Future: `notification.created` (Phase 6).

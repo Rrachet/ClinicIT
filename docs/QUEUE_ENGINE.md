@@ -223,8 +223,8 @@ the allocator and doctor-lock breaks.
 
 - **Authentication and clinic scoping** are done in Phase 3 ([SECURITY.md](SECURITY.md)). Queue lookups are
   clinic-scoped, and doctors can only run their own queue.
-- **Real-time events (Phase 4).** Each queue mutation is a single service method, which is the natural place
-  to publish `queue.updated` / `patient.called` after commit.
+- **Real-time events** are done in Phase 4 ([REALTIME.md](REALTIME.md)). Each mutation writes an outbox event in
+  its own transaction, and subscribers are notified after commit.
 - **Public patient status page.** Needs a non-guessable status token per queue entry and a minimal, PII-free
   response.
 - **Estimated wait.** Needs consultation-duration history (`consultation_started_at` → `completed_at` is now

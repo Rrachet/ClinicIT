@@ -83,5 +83,6 @@ curl -s localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
 - [API](docs/API.md)
 - [Queue engine](docs/QUEUE_ENGINE.md)
 - [Security: authentication, roles, clinic isolation](docs/SECURITY.md)
+- [Real-time queue (WebSocket)](docs/REALTIME.md)
 
 > ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.

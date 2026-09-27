@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
@@ -42,7 +43,7 @@ import java.util.UUID;
  * <p>All subclasses share one configuration, so Spring caches a single context (and
  * connection pool) for the whole suite. Don't add per-class context customisations.
  */
-@SpringBootTest
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
 @ExtendWith(PostgresAvailableCondition.class)
 @Import(PostgresIntegrationTest.ClockConfig.class)
@@ -74,6 +75,8 @@ public abstract class PostgresIntegrationTest {
         }
     }
 
+    @LocalServerPort protected int port;
+
     @Autowired protected MutableClock clock;
     @Autowired protected JdbcTemplate jdbc;
     @Autowired protected ClinicRepository clinics;
@@ -88,7 +91,7 @@ public abstract class PostgresIntegrationTest {
     void resetDatabase() {
         clock.set(NOW);
         jdbc.execute("""
-                truncate table login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
+                truncate table queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
                 """);
     }
