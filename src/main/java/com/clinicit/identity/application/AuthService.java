@@ -6,8 +6,10 @@ import com.clinicit.identity.api.UserResponse;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.identity.domain.AuthSession;
 import com.clinicit.identity.domain.AuthSessionRepository;
+import com.clinicit.identity.domain.SessionsRevoked;
 import com.clinicit.identity.domain.UserAccount;
 import com.clinicit.identity.domain.UserAccountRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,6 +28,7 @@ public class AuthService {
     private final SessionTokens tokens;
     private final AuthProperties properties;
     private final LoginThrottle throttle;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     /** Compared against when the email is unknown, so both failure paths cost one hash check. */
@@ -38,6 +41,7 @@ public class AuthService {
             SessionTokens tokens,
             AuthProperties properties,
             LoginThrottle throttle,
+            ApplicationEventPublisher events,
             Clock clock
     ) {
         this.users = users;
@@ -46,6 +50,7 @@ public class AuthService {
         this.tokens = tokens;
         this.properties = properties;
         this.throttle = throttle;
+        this.events = events;
         this.clock = clock;
         this.dummyPasswordHash = passwordEncoder.encode("timing-equaliser-not-a-real-password");
     }
@@ -85,8 +90,14 @@ public class AuthService {
     /** Resolves a bearer token to the staff member it was issued to, if it is still valid. */
     @Transactional(readOnly = true)
     public Optional<Actor> authenticate(String token) {
+        return authenticateTokenHash(tokens.hash(token));
+    }
+
+    /** For long-lived connections that keep only the hash of the token they connected with. */
+    @Transactional(readOnly = true)
+    public Optional<Actor> authenticateTokenHash(String tokenHash) {
         Instant now = clock.instant();
-        return sessions.findByTokenHash(tokens.hash(token))
+        return sessions.findByTokenHash(tokenHash)
                 .filter(session -> session.isActiveAt(now))
                 .flatMap(session -> users.findById(session.getUserId()))
                 .filter(UserAccount::isEnabled)
@@ -94,6 +105,14 @@ public class AuthService {
     }
 
     public void logout(String token) {
-        sessions.findByTokenHash(tokens.hash(token)).ifPresent(session -> session.revoke(clock.instant()));
+        String hash = tokens.hash(token);
+        sessions.findByTokenHash(hash).ifPresent(session -> {
+            session.revoke(clock.instant());
+            events.publishEvent(new SessionsRevoked(session.getUserId(), hash));
+        });
+    }
+
+    public String tokenHash(String token) {
+        return tokens.hash(token);
     }
 }

@@ -9,8 +9,10 @@ import com.clinicit.identity.api.UserResponse;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.identity.domain.AuthSessionRepository;
 import com.clinicit.identity.domain.Role;
+import com.clinicit.identity.domain.SessionsRevoked;
 import com.clinicit.identity.domain.UserAccount;
 import com.clinicit.identity.domain.UserAccountRepository;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +31,7 @@ public class UserService {
     private final DoctorProfileRepository doctors;
     private final PasswordEncoder passwordEncoder;
     private final LoginThrottle throttle;
+    private final ApplicationEventPublisher events;
     private final Clock clock;
 
     public UserService(
@@ -37,6 +40,7 @@ public class UserService {
             DoctorProfileRepository doctors,
             PasswordEncoder passwordEncoder,
             LoginThrottle throttle,
+            ApplicationEventPublisher events,
             Clock clock
     ) {
         this.users = users;
@@ -44,6 +48,7 @@ public class UserService {
         this.doctors = doctors;
         this.passwordEncoder = passwordEncoder;
         this.throttle = throttle;
+        this.events = events;
         this.clock = clock;
     }
 
@@ -101,6 +106,7 @@ public class UserService {
 
         user.changePasswordHash(passwordEncoder.encode(newPassword));
         sessions.revokeAllForUser(user.getId(), clock.instant());
+        events.publishEvent(SessionsRevoked.allOf(user.getId()));
         throttle.resetAccount(user.getEmail());
     }
 
@@ -121,6 +127,7 @@ public class UserService {
 
         user.disable();
         sessions.revokeAllForUser(user.getId(), clock.instant());
+        events.publishEvent(SessionsRevoked.allOf(user.getId()));
         return UserResponse.from(user);
     }
 }
