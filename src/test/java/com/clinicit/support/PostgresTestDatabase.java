@@ -27,7 +27,16 @@ public final class PostgresTestDatabase {
 
     public static synchronized String url() {
         String external = System.getenv(URL_ENV);
-        return external != null ? external : container().getJdbcUrl();
+        if (external == null) {
+            return container().getJdbcUrl();
+        }
+        // Tests truncate every table. Refuse anything that does not look like a test database.
+        String database = external.replaceFirst("\\?.*$", "").replaceFirst("^.*/", "");
+        if (!database.contains("test")) {
+            throw new IllegalStateException(
+                    URL_ENV + " must point at a database whose name contains 'test' (got '" + database + "')");
+        }
+        return external;
     }
 
     public static synchronized String username() {

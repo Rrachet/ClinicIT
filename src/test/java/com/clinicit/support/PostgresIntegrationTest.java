@@ -12,6 +12,7 @@ import com.clinicit.patient.domain.PatientRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
@@ -30,8 +31,12 @@ import java.util.UUID;
 /**
  * Full application against real PostgreSQL with the Flyway migrations applied and
  * {@code ddl-auto: validate}, so these tests also prove the schema matches the entities.
+ *
+ * <p>All subclasses share one configuration, so Spring caches a single context (and
+ * connection pool) for the whole suite. Don't add per-class context customisations.
  */
 @SpringBootTest
+@AutoConfigureMockMvc
 @ExtendWith(PostgresAvailableCondition.class)
 @Import(PostgresIntegrationTest.ClockConfig.class)
 public abstract class PostgresIntegrationTest {
@@ -45,7 +50,7 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.url", PostgresTestDatabase::url);
         registry.add("spring.datasource.username", PostgresTestDatabase::username);
         registry.add("spring.datasource.password", PostgresTestDatabase::password);
-        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "40");
+        registry.add("spring.datasource.hikari.maximum-pool-size", () -> "30");
     }
 
     @TestConfiguration
