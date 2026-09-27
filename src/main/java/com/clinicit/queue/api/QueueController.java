@@ -1,12 +1,13 @@
 package com.clinicit.queue.api;
 
+import com.clinicit.identity.domain.Actor;
+import com.clinicit.identity.security.AnyStaff;
 import com.clinicit.queue.application.QueueService;
-import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/** Operations on a doctor's queue as a whole. */
+/** Operations on a doctor's queue as a whole. Doctors may omit doctorId to mean themselves. */
 @RestController
 @RequestMapping("/api/v1/queues")
 public class QueueController {
@@ -19,12 +20,14 @@ public class QueueController {
 
     /** "Today" is resolved server-side in the clinic's timezone. */
     @GetMapping("/today")
-    public QueueBoardResponse today(@RequestParam UUID doctorId) {
-        return service.todayForDoctor(doctorId);
+    @AnyStaff
+    public QueueBoardResponse today(Actor actor, @RequestParam(required = false) UUID doctorId) {
+        return service.todayForDoctor(actor, doctorId);
     }
 
     @PostMapping("/call-next")
-    public QueueEntryResponse callNext(@Valid @RequestBody CallNextRequest request) {
-        return service.callNext(request.doctorId());
+    @AnyStaff
+    public QueueEntryResponse callNext(Actor actor, @RequestBody(required = false) CallNextRequest request) {
+        return service.callNext(actor, request == null ? null : request.doctorId());
     }
 }

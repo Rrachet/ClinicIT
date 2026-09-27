@@ -1,5 +1,8 @@
 package com.clinicit.queue.api;
 
+import com.clinicit.identity.domain.Actor;
+import com.clinicit.identity.security.AnyStaff;
+import com.clinicit.identity.security.FrontDesk;
 import com.clinicit.queue.application.QueueService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -7,7 +10,10 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
-/** A single patient's place in the queue. */
+/**
+ * A single patient's place in the queue. Checking in and front-desk corrections are
+ * front-desk only; running the consultation is open to the patient's doctor too.
+ */
 @RestController
 @RequestMapping("/api/v1/queue-entries")
 public class QueueEntryController {
@@ -21,37 +27,44 @@ public class QueueEntryController {
     /** Joining the queue creates a queue entry (and issues its token). */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public QueueEntryResponse join(@Valid @RequestBody JoinQueueRequest request) {
-        return service.join(request.appointmentId());
+    @FrontDesk
+    public QueueEntryResponse join(Actor actor, @Valid @RequestBody JoinQueueRequest request) {
+        return service.join(actor, request.appointmentId());
     }
 
     @GetMapping("/{id}")
-    public QueueEntryResponse get(@PathVariable UUID id) {
-        return service.get(id);
+    @AnyStaff
+    public QueueEntryResponse get(Actor actor, @PathVariable UUID id) {
+        return service.get(actor, id);
     }
 
     @PostMapping("/{id}/start")
-    public QueueEntryResponse start(@PathVariable UUID id) {
-        return service.startConsultation(id);
+    @AnyStaff
+    public QueueEntryResponse start(Actor actor, @PathVariable UUID id) {
+        return service.startConsultation(actor, id);
     }
 
     @PostMapping("/{id}/complete")
-    public QueueEntryResponse complete(@PathVariable UUID id) {
-        return service.complete(id);
+    @AnyStaff
+    public QueueEntryResponse complete(Actor actor, @PathVariable UUID id) {
+        return service.complete(actor, id);
     }
 
     @PostMapping("/{id}/skip")
-    public QueueEntryResponse skip(@PathVariable UUID id) {
-        return service.skip(id);
+    @AnyStaff
+    public QueueEntryResponse skip(Actor actor, @PathVariable UUID id) {
+        return service.skip(actor, id);
     }
 
     @PostMapping("/{id}/requeue")
-    public QueueEntryResponse requeue(@PathVariable UUID id) {
-        return service.requeue(id);
+    @FrontDesk
+    public QueueEntryResponse requeue(Actor actor, @PathVariable UUID id) {
+        return service.requeue(actor, id);
     }
 
     @PostMapping("/{id}/no-show")
-    public QueueEntryResponse noShow(@PathVariable UUID id) {
-        return service.markNoShow(id);
+    @FrontDesk
+    public QueueEntryResponse noShow(Actor actor, @PathVariable UUID id) {
+        return service.markNoShow(actor, id);
     }
 }

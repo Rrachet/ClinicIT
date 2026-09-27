@@ -60,6 +60,21 @@ CLINICIT_TEST_DB_URL=jdbc:postgresql://localhost:5432/clinicit_test mvn test
 
 With neither available they are reported as skipped.
 
+## Running locally
+
+```bash
+# PostgreSQL at localhost:5432/clinicit (override with DB_URL / DB_USERNAME / DB_PASSWORD).
+# On an empty database, create the first clinic and admin from environment variables:
+CLINICIT_BOOTSTRAP_CLINIC_NAME="City Clinic" \
+CLINICIT_BOOTSTRAP_ADMIN_EMAIL=owner@cityclinic.example \
+CLINICIT_BOOTSTRAP_ADMIN_PASSWORD='choose-a-long-password' \
+mvn spring-boot:run
+
+curl -s localhost:8080/api/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"owner@cityclinic.example","password":"choose-a-long-password"}'
+# then send: Authorization: Bearer <accessToken>
+```
+
 ## Design docs
 
 - [Product spec](docs/PRODUCT_SPEC.md)
@@ -67,5 +82,6 @@ With neither available they are reported as skipped.
 - [Data model](docs/DATA_MODEL.md)
 - [API](docs/API.md)
 - [Queue engine](docs/QUEUE_ENGINE.md)
+- [Security: authentication, roles, clinic isolation](docs/SECURITY.md)
 
 > ClinicIT is an operational system. AI features will assist clinic operations and will not make medical diagnoses or autonomous clinical decisions.

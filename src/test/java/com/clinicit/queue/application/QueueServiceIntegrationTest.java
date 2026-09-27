@@ -7,6 +7,7 @@ import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.InvalidStateTransitionException;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.queue.api.QueueBoardResponse;
 import com.clinicit.queue.api.QueueEntryResponse;
 import com.clinicit.queue.domain.QueueStatus;
@@ -28,16 +29,18 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     Clinic clinic;
     DoctorProfile sharma;
     DoctorProfile mehta;
+    Actor desk;
 
     @BeforeEach
     void setUp() {
         clinic = clinic("City Clinic");
         sharma = doctor(clinic, "Dr. Sharma");
         mehta = doctor(clinic, "Dr. Mehta");
+        desk = frontDesk(clinic);
     }
 
     private QueueEntryResponse join(DoctorProfile doctor, String patientName) {
-        return queue.join(arrivedAppointment(doctor, patient(clinic, patientName)).getId());
+        return queue.join(desk, arrivedAppointment(doctor, patient(clinic, patientName)).getId());
     }
 
     @Test
@@ -63,13 +66,13 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         Clinic other = clinic("Other Clinic");
         DoctorProfile otherDoctor = doctor(other, "Dr. Iyer");
         QueueEntryResponse otherClinicFirst =
-                queue.join(arrivedAppointment(otherDoctor, patient(other, "Meera")).getId());
+                queue.join(frontDesk(other), arrivedAppointment(otherDoctor, patient(other, "Meera")).getId());
         assertThat(otherClinicFirst.tokenNumber()).isEqualTo(1);
 
         clock.set(NOW.plusSeconds(86_400));
         Appointment tomorrow = appointmentOn(sharma, patient(clinic, "Tomorrow Patient"), TODAY.plusDays(1),
                 AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED);
-        QueueEntryResponse nextDayFirst = queue.join(tomorrow.getId());
+        QueueEntryResponse nextDayFirst = queue.join(desk, tomorrow.getId());
         assertThat(nextDayFirst.tokenNumber()).isEqualTo(1);
         assertThat(nextDayFirst.queueDate()).isEqualTo(TODAY.plusDays(1));
     }
@@ -81,7 +84,7 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         Appointment eleventh = appointmentOn(sharma, patient(clinic, "Late Patient"), TODAY.plusDays(1),
                 AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED);
 
-        assertThat(queue.join(eleventh.getId()).queueDate()).isEqualTo(TODAY.plusDays(1));
+        assertThat(queue.join(desk, eleventh.getId()).queueDate()).isEqualTo(TODAY.plusDays(1));
     }
 
     @Test
@@ -89,7 +92,7 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         Appointment confirmed = appointmentOn(sharma, patient(clinic, "Not Here Yet"), TODAY,
                 AppointmentStatus.CONFIRMED);
 
-        assertThatThrownBy(() -> queue.join(confirmed.getId()))
+        assertThatThrownBy(() -> queue.join(desk, confirmed.getId()))
                 .isInstanceOf(InvalidStateTransitionException.class);
         assertThat(appointmentStatus(confirmed.getId())).isEqualTo(AppointmentStatus.CONFIRMED);
     }
@@ -98,7 +101,7 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     void appointmentCannotJoinTwice() {
         QueueEntryResponse first = join(sharma, "Rahul Kumar");
 
-        assertThatThrownBy(() -> queue.join(first.appointmentId()))
+        assertThatThrownBy(() -> queue.join(desk, first.appointmentId()))
                 .isInstanceOf(InvalidStateTransitionException.class);
     }
 
@@ -107,7 +110,7 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         Appointment tomorrow = appointmentOn(sharma, patient(clinic, "Early Bird"), TODAY.plusDays(1),
                 AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED);
 
-        assertThatThrownBy(() -> queue.join(tomorrow.getId()))
+        assertThatThrownBy(() -> queue.join(desk, tomorrow.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("NOT_TODAY");
     }
@@ -116,7 +119,7 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     void failedJoinDoesNotConsumeAToken() {
         Appointment tomorrow = appointmentOn(sharma, patient(clinic, "Early Bird"), TODAY.plusDays(1),
                 AppointmentStatus.CONFIRMED, AppointmentStatus.ARRIVED);
-        assertThatThrownBy(() -> queue.join(tomorrow.getId())).isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> queue.join(desk, tomorrow.getId())).isInstanceOf(BusinessRuleException.class);
 
         assertThat(join(sharma, "Rahul Kumar").tokenNumber()).isEqualTo(1);
     }
@@ -127,28 +130,28 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         join(mehta, "B");
         QueueEntryResponse s2 = join(sharma, "C");
 
-        QueueEntryResponse called = queue.callNext(sharma.getId());
+        QueueEntryResponse called = queue.callNext(desk, sharma.getId());
         assertThat(called.id()).isEqualTo(s1.id());
         assertThat(called.status()).isEqualTo(QueueStatus.CALLED);
         assertThat(called.calledAt()).isEqualTo(NOW);
         assertThat(appointmentStatus(s1.appointmentId())).isEqualTo(AppointmentStatus.CALLED);
 
-        queue.startConsultation(s1.id());
-        queue.complete(s1.id());
+        queue.startConsultation(desk, s1.id());
+        queue.complete(desk, s1.id());
 
-        assertThat(queue.callNext(sharma.getId()).id()).isEqualTo(s2.id());
+        assertThat(queue.callNext(desk, sharma.getId()).id()).isEqualTo(s2.id());
     }
 
     @Test
     void fullLifecycleKeepsAppointmentInSync() {
         QueueEntryResponse entry = join(sharma, "Rahul Kumar");
 
-        queue.callNext(sharma.getId());
-        QueueEntryResponse started = queue.startConsultation(entry.id());
+        queue.callNext(desk, sharma.getId());
+        QueueEntryResponse started = queue.startConsultation(desk, entry.id());
         assertThat(started.status()).isEqualTo(QueueStatus.IN_CONSULTATION);
         assertThat(appointmentStatus(entry.appointmentId())).isEqualTo(AppointmentStatus.IN_CONSULTATION);
 
-        QueueEntryResponse completed = queue.complete(entry.id());
+        QueueEntryResponse completed = queue.complete(desk, entry.id());
         assertThat(completed.status()).isEqualTo(QueueStatus.COMPLETED);
         assertThat(completed.completedAt()).isNotNull();
         assertThat(appointmentStatus(entry.appointmentId())).isEqualTo(AppointmentStatus.COMPLETED);
@@ -158,9 +161,9 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     void cannotCallNextWhileDoctorHasActivePatient() {
         join(sharma, "A");
         join(sharma, "B");
-        queue.callNext(sharma.getId());
+        queue.callNext(desk, sharma.getId());
 
-        assertThatThrownBy(() -> queue.callNext(sharma.getId()))
+        assertThatThrownBy(() -> queue.callNext(desk, sharma.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("DOCTOR_BUSY");
     }
@@ -169,14 +172,14 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     void anotherDoctorIsNotBlocked() {
         join(sharma, "A");
         join(mehta, "B");
-        queue.callNext(sharma.getId());
+        queue.callNext(desk, sharma.getId());
 
-        assertThat(queue.callNext(mehta.getId()).status()).isEqualTo(QueueStatus.CALLED);
+        assertThat(queue.callNext(desk, mehta.getId()).status()).isEqualTo(QueueStatus.CALLED);
     }
 
     @Test
     void callNextOnEmptyQueue() {
-        assertThatThrownBy(() -> queue.callNext(sharma.getId()))
+        assertThatThrownBy(() -> queue.callNext(desk, sharma.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("QUEUE_EMPTY");
     }
@@ -186,19 +189,19 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         QueueEntryResponse first = join(sharma, "Stepped Out");
         QueueEntryResponse second = join(sharma, "Present");
 
-        queue.callNext(sharma.getId());
-        QueueEntryResponse skipped = queue.skip(first.id());
+        queue.callNext(desk, sharma.getId());
+        QueueEntryResponse skipped = queue.skip(desk, first.id());
         assertThat(skipped.status()).isEqualTo(QueueStatus.SKIPPED);
         assertThat(appointmentStatus(first.appointmentId())).isEqualTo(AppointmentStatus.SKIPPED);
 
-        assertThat(queue.callNext(sharma.getId()).id()).isEqualTo(second.id());
-        queue.startConsultation(second.id());
-        queue.complete(second.id());
+        assertThat(queue.callNext(desk, sharma.getId()).id()).isEqualTo(second.id());
+        queue.startConsultation(desk, second.id());
+        queue.complete(desk, second.id());
 
-        QueueEntryResponse back = queue.requeue(first.id());
+        QueueEntryResponse back = queue.requeue(desk, first.id());
         assertThat(back.status()).isEqualTo(QueueStatus.WAITING);
         assertThat(back.tokenNumber()).isEqualTo(first.tokenNumber());
-        assertThat(queue.callNext(sharma.getId()).id()).isEqualTo(first.id());
+        assertThat(queue.callNext(desk, sharma.getId()).id()).isEqualTo(first.id());
     }
 
     @Test
@@ -206,17 +209,17 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         QueueEntryResponse first = join(sharma, "Went To Pharmacy");
         QueueEntryResponse second = join(sharma, "Present");
 
-        queue.skip(first.id());
+        queue.skip(desk, first.id());
 
-        assertThat(queue.callNext(sharma.getId()).id()).isEqualTo(second.id());
+        assertThat(queue.callNext(desk, sharma.getId()).id()).isEqualTo(second.id());
     }
 
     @Test
     void skippedPatientCanBeMarkedNoShow() {
         QueueEntryResponse entry = join(sharma, "Never Returned");
-        queue.skip(entry.id());
+        queue.skip(desk, entry.id());
 
-        QueueEntryResponse noShow = queue.markNoShow(entry.id());
+        QueueEntryResponse noShow = queue.markNoShow(desk, entry.id());
 
         assertThat(noShow.status()).isEqualTo(QueueStatus.NO_SHOW);
         assertThat(appointmentStatus(entry.appointmentId())).isEqualTo(AppointmentStatus.NO_SHOW);
@@ -226,10 +229,10 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
     void invalidTransitionLeavesEntryAndAppointmentUntouched() {
         QueueEntryResponse entry = join(sharma, "Rahul Kumar");
 
-        assertThatThrownBy(() -> queue.complete(entry.id()))
+        assertThatThrownBy(() -> queue.complete(desk, entry.id()))
                 .isInstanceOf(InvalidStateTransitionException.class);
 
-        assertThat(queue.get(entry.id()).status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(queue.get(desk, entry.id()).status()).isEqualTo(QueueStatus.WAITING);
         assertThat(appointmentStatus(entry.appointmentId())).isEqualTo(AppointmentStatus.WAITING);
     }
 
@@ -241,10 +244,10 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
         QueueEntryResponse c = join(sharma, "C");
         QueueEntryResponse d = join(sharma, "D");
 
-        queue.callNext(sharma.getId());   // A called
-        queue.skip(b.id());               // B stepped out
+        queue.callNext(desk, sharma.getId());   // A called
+        queue.skip(desk, b.id());               // B stepped out
 
-        QueueBoardResponse board = queue.todayForDoctor(sharma.getId());
+        QueueBoardResponse board = queue.todayForDoctor(desk, sharma.getId());
 
         assertThat(board.queueDate()).isEqualTo(TODAY);
         assertThat(board.currentToken()).isEqualTo(a.tokenNumber());
@@ -261,8 +264,8 @@ class QueueServiceIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void unknownIdsAreNotFound() {
-        assertThatThrownBy(() -> queue.join(UUID.randomUUID())).isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> queue.callNext(UUID.randomUUID())).isInstanceOf(NotFoundException.class);
-        assertThatThrownBy(() -> queue.skip(UUID.randomUUID())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> queue.join(desk, UUID.randomUUID())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> queue.callNext(desk, UUID.randomUUID())).isInstanceOf(NotFoundException.class);
+        assertThatThrownBy(() -> queue.skip(desk, UUID.randomUUID())).isInstanceOf(NotFoundException.class);
     }
 }

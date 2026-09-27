@@ -221,9 +221,8 @@ the allocator and doctor-lock breaks.
 
 ## Deliberately deferred
 
-- **Authentication and clinic scoping (Phase 3).** Endpoints currently trust the ids they receive. The
-  service already derives the clinic from the appointment or doctor, so Phase 3 only has to check that it
-  matches the caller's clinic.
+- **Authentication and clinic scoping** are done in Phase 3 ([SECURITY.md](SECURITY.md)). Queue lookups are
+  clinic-scoped, and doctors can only run their own queue.
 - **Real-time events (Phase 4).** Each queue mutation is a single service method, which is the natural place
   to publish `queue.updated` / `patient.called` after commit.
 - **Public patient status page.** Needs a non-guessable status token per queue entry and a minimal, PII-free

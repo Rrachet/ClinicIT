@@ -7,6 +7,11 @@ import com.clinicit.clinic.domain.Clinic;
 import com.clinicit.clinic.domain.ClinicRepository;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
+import com.clinicit.identity.application.AuthService;
+import com.clinicit.identity.domain.Actor;
+import com.clinicit.identity.domain.Role;
+import com.clinicit.identity.domain.UserAccount;
+import com.clinicit.identity.domain.UserAccountRepository;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -19,6 +24,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 
@@ -44,6 +51,8 @@ public abstract class PostgresIntegrationTest {
     /** 2026-03-10 11:00 in Asia/Kolkata (UTC+05:30). */
     protected static final Instant NOW = Instant.parse("2026-03-10T05:30:00Z");
     protected static final LocalDate TODAY = LocalDate.of(2026, 3, 10);
+    protected static final String FRONTEND_ORIGIN = "https://app.clinicit.test";
+    protected static final String PASSWORD = "correct horse battery staple";
 
     @DynamicPropertySource
     static void database(DynamicPropertyRegistry registry) {
@@ -51,6 +60,9 @@ public abstract class PostgresIntegrationTest {
         registry.add("spring.datasource.username", PostgresTestDatabase::username);
         registry.add("spring.datasource.password", PostgresTestDatabase::password);
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "30");
+        // Background jobs are invoked directly by the tests that need them.
+        registry.add("clinicit.scheduling.enabled", () -> "false");
+        registry.add("clinicit.cors.allowed-origins", () -> FRONTEND_ORIGIN);
     }
 
     @TestConfiguration
@@ -68,13 +80,16 @@ public abstract class PostgresIntegrationTest {
     @Autowired protected DoctorProfileRepository doctors;
     @Autowired protected PatientRepository patients;
     @Autowired protected AppointmentRepository appointments;
+    @Autowired protected UserAccountRepository users;
+    @Autowired protected AuthService authService;
+    @Autowired protected PasswordEncoder passwordEncoder;
 
     @BeforeEach
     void resetDatabase() {
         clock.set(NOW);
         jdbc.execute("""
-                truncate table queue_token_counters, queue_entries, appointments,
-                               patients, doctor_profiles, clinics cascade
+                truncate table login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
+                               appointments, patients, doctor_profiles, clinics cascade
                 """);
     }
 
@@ -117,6 +132,33 @@ public abstract class PostgresIntegrationTest {
             appointment.transitionTo(status);
         }
         return appointments.save(appointment);
+    }
+
+    /** A receptionist of the clinic, for calling services directly (no user row needed). */
+    protected Actor frontDesk(Clinic clinic) {
+        return new Actor(UUID.randomUUID(), clinic.getId(), Role.RECEPTIONIST, null);
+    }
+
+    protected Actor doctorActor(DoctorProfile doctor) {
+        return new Actor(UUID.randomUUID(), doctor.getClinicId(), Role.DOCTOR, doctor.getId());
+    }
+
+    /** A real staff account with password {@link #PASSWORD}. */
+    protected UserAccount staff(Clinic clinic, Role role, DoctorProfile doctor, String email) {
+        return users.save(new UserAccount(
+                clinic.getId(), email, passwordEncoder.encode(PASSWORD), email, role,
+                doctor == null ? null : doctor.getId()));
+    }
+
+    protected String login(UserAccount user) {
+        return authService.login(user.getEmail(), PASSWORD, "127.0.0.1").accessToken();
+    }
+
+    protected static RequestPostProcessor bearer(String token) {
+        return request -> {
+            request.addHeader("Authorization", "Bearer " + token);
+            return request;
+        };
     }
 
     protected AppointmentStatus appointmentStatus(UUID appointmentId) {

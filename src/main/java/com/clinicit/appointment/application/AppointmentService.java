@@ -9,6 +9,7 @@ import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.PatientRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,18 +39,16 @@ public class AppointmentService {
         this.clinicTime = clinicTime;
     }
 
-    public AppointmentResponse create(CreateAppointmentRequest request) {
-        // Patient and doctor must belong to the clinic the appointment is booked in;
-        // otherwise one clinic could book (and later queue) another clinic's patients.
-        patients.findById(request.patientId())
-                .filter(patient -> patient.getClinicId().equals(request.clinicId()))
-                .orElseThrow(() -> new NotFoundException("Patient not found in clinic"));
-        doctors.findById(request.doctorId())
-                .filter(doctor -> doctor.getClinicId().equals(request.clinicId()))
-                .orElseThrow(() -> new NotFoundException("Doctor not found in clinic"));
+    public AppointmentResponse create(Actor actor, CreateAppointmentRequest request) {
+        // The appointment is booked in the caller's clinic; patient and doctor must be from it
+        // too, otherwise one clinic could book (and later queue) another clinic's patients.
+        patients.findByIdAndClinicId(request.patientId(), actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("Patient not found"));
+        doctors.findByIdAndClinicId(request.doctorId(), actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("Doctor not found"));
 
         Appointment appointment = new Appointment();
-        appointment.setClinicId(request.clinicId());
+        appointment.setClinicId(actor.clinicId());
         appointment.setPatientId(request.patientId());
         appointment.setDoctorId(request.doctorId());
         appointment.setScheduledAt(request.scheduledAt());
@@ -59,14 +58,18 @@ public class AppointmentService {
     }
 
     @Transactional(readOnly = true)
-    public AppointmentResponse get(UUID id) {
-        return repository.findById(id)
-                .map(AppointmentResponse::from)
+    public AppointmentResponse get(Actor actor, UUID id) {
+        Appointment appointment = repository.findByIdAndClinicId(id, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
+        actor.requireAccessToDoctor(appointment.getDoctorId());
+        return AppointmentResponse.from(appointment);
     }
 
     @Transactional(readOnly = true)
-    public List<AppointmentResponse> forDate(UUID clinicId, UUID doctorId, LocalDate date) {
+    public List<AppointmentResponse> forDate(Actor actor, UUID requestedDoctorId, LocalDate date) {
+        UUID clinicId = actor.clinicId();
+        // Front desk may list the whole clinic or one doctor; a doctor only ever sees their own.
+        UUID doctorId = actor.isDoctor() ? actor.resolveDoctor(requestedDoctorId) : requestedDoctorId;
         var from = date.atStartOfDay();
         var to = date.plusDays(1).atStartOfDay();
 
@@ -78,16 +81,16 @@ public class AppointmentService {
                 .toList();
     }
 
-    public AppointmentResponse confirm(UUID id) {
-        return transition(id, AppointmentStatus.CONFIRMED);
+    public AppointmentResponse confirm(Actor actor, UUID id) {
+        return transition(actor, id, AppointmentStatus.CONFIRMED);
     }
 
-    public AppointmentResponse cancel(UUID id) {
-        return transition(id, AppointmentStatus.CANCELLED);
+    public AppointmentResponse cancel(Actor actor, UUID id) {
+        return transition(actor, id, AppointmentStatus.CANCELLED);
     }
 
-    public AppointmentResponse arrive(UUID id) {
-        return transition(id, AppointmentStatus.ARRIVED);
+    public AppointmentResponse arrive(Actor actor, UUID id) {
+        return transition(actor, id, AppointmentStatus.ARRIVED);
     }
 
     /**
@@ -95,8 +98,8 @@ public class AppointmentService {
      * arrived (CONFIRMED, only once the appointment time has passed) or they checked in
      * and left before joining (ARRIVED). Queued patients go through the queue's no-show.
      */
-    public AppointmentResponse markNoShow(UUID id) {
-        Appointment appointment = lockForTransition(id);
+    public AppointmentResponse markNoShow(Actor actor, UUID id) {
+        Appointment appointment = lockForTransition(actor, id);
 
         if (appointment.getStatus() == AppointmentStatus.CONFIRMED
                 && clinicTime.now(appointment.getClinicId()).isBefore(appointment.getScheduledAt())) {
@@ -108,14 +111,14 @@ public class AppointmentService {
         return AppointmentResponse.from(appointment);
     }
 
-    private AppointmentResponse transition(UUID id, AppointmentStatus target) {
-        Appointment appointment = lockForTransition(id);
+    private AppointmentResponse transition(Actor actor, UUID id, AppointmentStatus target) {
+        Appointment appointment = lockForTransition(actor, id);
         appointment.transitionTo(target);
         return AppointmentResponse.from(appointment);
     }
 
-    private Appointment lockForTransition(UUID id) {
-        Appointment appointment = repository.findByIdForUpdate(id)
+    private Appointment lockForTransition(Actor actor, UUID id) {
+        Appointment appointment = repository.findByIdAndClinicIdForUpdate(id, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
 
         // Once queued, the queue entry owns the status. Changing the appointment here

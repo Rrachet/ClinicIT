@@ -12,10 +12,15 @@ import java.util.UUID;
 
 public interface AppointmentRepository extends JpaRepository<Appointment, UUID> {
 
-    /** Row lock so concurrent status changes (e.g. cancel vs. arrive) cannot lose updates. */
+    Optional<Appointment> findByIdAndClinicId(UUID id, UUID clinicId);
+
+    /**
+     * Row lock so concurrent status changes (e.g. cancel vs. arrive) cannot lose updates.
+     * Clinic-scoped: another clinic's appointment is simply not found.
+     */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select a from Appointment a where a.id = :id")
-    Optional<Appointment> findByIdForUpdate(UUID id);
+    @Query("select a from Appointment a where a.id = :id and a.clinicId = :clinicId")
+    Optional<Appointment> findByIdAndClinicIdForUpdate(UUID id, UUID clinicId);
 
     /** Appointments in [from, to): a day's listing must not include the next day's 00:00 slot. */
     @Query("""

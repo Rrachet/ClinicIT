@@ -16,6 +16,24 @@ spring:
 server:
   port: ${PORT:8080}
 
+clinicit:
+  auth:
+    # Absolute lifetime of a login token (ISO-8601 duration); covers one clinic shift.
+    session-ttl: ${CLINICIT_SESSION_TTL:PT12H}
+    # Brute-force protection: attempts per account / failures per client IP per window.
+    login-window: PT15M
+    max-attempts-per-account: 5
+    max-failures-per-ip: 30
+    # Purge of expired/revoked sessions and stale throttle rows.
+    cleanup-interval: PT1H
+  cors:
+    # Comma-separated exact origins of the web frontend, e.g. https://app.example.com
+    allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS:}
+  # First clinic + admin on an empty database. Set through environment variables only,
+  # never committed: CLINICIT_BOOTSTRAP_ADMIN_EMAIL, CLINICIT_BOOTSTRAP_ADMIN_PASSWORD,
+  # CLINICIT_BOOTSTRAP_CLINIC_NAME (optional: CLINICIT_BOOTSTRAP_ADMIN_NAME,
+  # CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE).
+
 management:
   endpoints:
     web:

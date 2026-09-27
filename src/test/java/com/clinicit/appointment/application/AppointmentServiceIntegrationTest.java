@@ -6,6 +6,7 @@ import com.clinicit.clinic.domain.Clinic;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.InvalidStateTransitionException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.queue.application.QueueService;
 import com.clinicit.queue.domain.QueueStatus;
 import com.clinicit.support.PostgresIntegrationTest;
@@ -26,11 +27,13 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
 
     Clinic clinic;
     DoctorProfile doctor;
+    Actor desk;
 
     @BeforeEach
     void setUp() {
         clinic = clinic("City Clinic");
         doctor = doctor(clinic, "Dr. Sharma");
+        desk = frontDesk(clinic);
     }
 
     private Appointment confirmedAt(LocalTime clinicLocalTime) {
@@ -44,7 +47,7 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
         // Clinic-local time is 11:00; the 10:30 appointment has passed.
         Appointment missed = confirmedAt(LocalTime.of(10, 30));
 
-        assertThat(service.markNoShow(missed.getId()).status()).isEqualTo(AppointmentStatus.NO_SHOW);
+        assertThat(service.markNoShow(desk, missed.getId()).status()).isEqualTo(AppointmentStatus.NO_SHOW);
         assertThat(appointmentStatus(missed.getId())).isEqualTo(AppointmentStatus.NO_SHOW);
     }
 
@@ -52,7 +55,7 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
     void noShowCannotBeRecordedBeforeTheAppointmentTime() {
         Appointment later = confirmedAt(LocalTime.of(16, 0));
 
-        assertThatThrownBy(() -> service.markNoShow(later.getId()))
+        assertThatThrownBy(() -> service.markNoShow(desk, later.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("TOO_EARLY");
         assertThat(appointmentStatus(later.getId())).isEqualTo(AppointmentStatus.CONFIRMED);
@@ -64,34 +67,34 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
         // (tests run as America/Los_Angeles). An 11:15 appointment is still in the future.
         Appointment soon = confirmedAt(LocalTime.of(11, 15));
 
-        assertThatThrownBy(() -> service.markNoShow(soon.getId())).isInstanceOf(BusinessRuleException.class);
+        assertThatThrownBy(() -> service.markNoShow(desk, soon.getId())).isInstanceOf(BusinessRuleException.class);
     }
 
     @Test
     void unconfirmedBookingCannotBeNoShow() {
         Appointment booked = appointmentOn(doctor, patient(clinic, "Rahul"), TODAY);
 
-        assertThatThrownBy(() -> service.markNoShow(booked.getId()))
+        assertThatThrownBy(() -> service.markNoShow(desk, booked.getId()))
                 .isInstanceOf(InvalidStateTransitionException.class);
     }
 
     @Test
     void queuedAppointmentCannotBeChangedDirectly() {
         Appointment appointment = arrivedAppointment(doctor, patient(clinic, "Stepped Out"));
-        var entry = queue.join(appointment.getId());
-        queue.skip(entry.id());
+        var entry = queue.join(desk, appointment.getId());
+        queue.skip(desk, entry.id());
 
         // SKIPPED -> NO_SHOW is a legal appointment transition, but doing it here would leave
         // the queue entry SKIPPED. It must go through the queue entry instead.
-        assertThatThrownBy(() -> service.markNoShow(appointment.getId()))
+        assertThatThrownBy(() -> service.markNoShow(desk, appointment.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("QUEUE_MANAGED");
-        assertThatThrownBy(() -> service.cancel(appointment.getId()))
+        assertThatThrownBy(() -> service.cancel(desk, appointment.getId()))
                 .isInstanceOf(BusinessRuleException.class)
                 .extracting("code").isEqualTo("QUEUE_MANAGED");
 
         assertThat(appointmentStatus(appointment.getId())).isEqualTo(AppointmentStatus.SKIPPED);
-        assertThat(queue.get(entry.id()).status()).isEqualTo(QueueStatus.SKIPPED);
+        assertThat(queue.get(desk, entry.id()).status()).isEqualTo(QueueStatus.SKIPPED);
     }
 
     @Test
@@ -103,10 +106,10 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
         nextMidnight.setScheduledAt(TODAY.plusDays(1).atStartOfDay());
         appointments.save(nextMidnight);
 
-        assertThat(service.forDate(clinic.getId(), null, TODAY)).extracting("id").containsExactly(lastSlot.getId());
-        assertThat(service.forDate(clinic.getId(), doctor.getId(), TODAY)).extracting("id")
+        assertThat(service.forDate(desk, null, TODAY)).extracting("id").containsExactly(lastSlot.getId());
+        assertThat(service.forDate(desk, doctor.getId(), TODAY)).extracting("id")
                 .containsExactly(lastSlot.getId());
-        assertThat(service.forDate(clinic.getId(), null, TODAY.plusDays(1))).extracting("id")
+        assertThat(service.forDate(desk, null, TODAY.plusDays(1))).extracting("id")
                 .containsExactly(nextMidnight.getId());
     }
 

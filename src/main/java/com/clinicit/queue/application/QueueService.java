@@ -9,6 +9,7 @@ import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.InvalidStateTransitionException;
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
 import com.clinicit.queue.api.QueueBoardResponse;
@@ -29,7 +30,10 @@ import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
 
 /**
- * Queue engine. Every mutation runs in one transaction that updates the queue
+ * Queue engine. Every lookup is scoped to the caller's clinic (another clinic's ids
+ * are simply "not found"), and doctors may only act on their own queue.
+ *
+ * <p>Every mutation runs in one transaction that updates the queue
  * entry and its appointment together, so the two never disagree.
  *
  * <p>Lock order, to rule out deadlocks: doctor → queue entry → appointment → token counter.
@@ -67,8 +71,8 @@ public class QueueService {
     }
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
-    public QueueEntryResponse join(UUID appointmentId) {
-        Appointment appointment = appointments.findByIdForUpdate(appointmentId)
+    public QueueEntryResponse join(Actor actor, UUID appointmentId) {
+        Appointment appointment = appointments.findByIdAndClinicIdForUpdate(appointmentId, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
 
         // Fail before touching the token counter.
@@ -95,8 +99,9 @@ public class QueueService {
      * the current patient must be completed or skipped first. The doctor row lock
      * makes the check-then-call atomic across concurrent callers.
      */
-    public QueueEntryResponse callNext(UUID doctorId) {
-        DoctorProfile doctor = doctors.findByIdForUpdate(doctorId)
+    public QueueEntryResponse callNext(Actor actor, UUID requestedDoctorId) {
+        UUID doctorId = actor.resolveDoctor(requestedDoctorId);
+        DoctorProfile doctor = doctors.findByIdAndClinicIdForUpdate(doctorId, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
         LocalDate today = clinicTime.today(doctor.getClinicId());
 
@@ -113,37 +118,39 @@ public class QueueService {
         return QueueEntryResponse.from(next);
     }
 
-    public QueueEntryResponse startConsultation(UUID entryId) {
-        return mutate(entryId, QueueEntry::startConsultation);
+    public QueueEntryResponse startConsultation(Actor actor, UUID entryId) {
+        return mutate(actor, entryId, QueueEntry::startConsultation);
     }
 
-    public QueueEntryResponse complete(UUID entryId) {
-        return mutate(entryId, QueueEntry::complete);
+    public QueueEntryResponse complete(Actor actor, UUID entryId) {
+        return mutate(actor, entryId, QueueEntry::complete);
     }
 
-    public QueueEntryResponse skip(UUID entryId) {
-        return mutate(entryId, QueueEntry::skip);
+    public QueueEntryResponse skip(Actor actor, UUID entryId) {
+        return mutate(actor, entryId, QueueEntry::skip);
     }
 
-    public QueueEntryResponse requeue(UUID entryId) {
-        return mutate(entryId, QueueEntry::requeue);
+    public QueueEntryResponse requeue(Actor actor, UUID entryId) {
+        return mutate(actor, entryId, QueueEntry::requeue);
     }
 
-    public QueueEntryResponse markNoShow(UUID entryId) {
-        return mutate(entryId, QueueEntry::markNoShow);
+    public QueueEntryResponse markNoShow(Actor actor, UUID entryId) {
+        return mutate(actor, entryId, QueueEntry::markNoShow);
     }
 
     @Transactional(readOnly = true)
-    public QueueEntryResponse get(UUID entryId) {
-        return entries.findById(entryId)
-                .map(QueueEntryResponse::from)
+    public QueueEntryResponse get(Actor actor, UUID entryId) {
+        QueueEntry entry = entries.findByIdAndClinicId(entryId, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Queue entry not found"));
+        actor.requireAccessToDoctor(entry.getDoctorId());
+        return QueueEntryResponse.from(entry);
     }
 
     /** Today's queue for one doctor, in token order. For staff screens (includes patient names). */
     @Transactional(readOnly = true)
-    public QueueBoardResponse todayForDoctor(UUID doctorId) {
-        DoctorProfile doctor = doctors.findById(doctorId)
+    public QueueBoardResponse todayForDoctor(Actor actor, UUID requestedDoctorId) {
+        UUID doctorId = actor.resolveDoctor(requestedDoctorId);
+        DoctorProfile doctor = doctors.findByIdAndClinicId(doctorId, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
         LocalDate today = clinicTime.today(doctor.getClinicId());
 
@@ -153,9 +160,10 @@ public class QueueService {
         return QueueBoardResponse.from(doctorId, today, queue, names);
     }
 
-    private QueueEntryResponse mutate(UUID entryId, BiConsumer<QueueEntry, Instant> transition) {
-        QueueEntry entry = entries.findByIdForUpdate(entryId)
+    private QueueEntryResponse mutate(Actor actor, UUID entryId, BiConsumer<QueueEntry, Instant> transition) {
+        QueueEntry entry = entries.findByIdAndClinicIdForUpdate(entryId, actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Queue entry not found"));
+        actor.requireAccessToDoctor(entry.getDoctorId());
 
         transition.accept(entry, clinicTime.instant());
         syncAppointment(entry);
@@ -163,7 +171,7 @@ public class QueueService {
     }
 
     private void syncAppointment(QueueEntry entry) {
-        Appointment appointment = appointments.findByIdForUpdate(entry.getAppointmentId())
+        Appointment appointment = appointments.findByIdAndClinicIdForUpdate(entry.getAppointmentId(), entry.getClinicId())
                 .orElseThrow(() -> new IllegalStateException("Queue entry without appointment"));
         appointment.transitionTo(entry.getStatus().toAppointmentStatus());
     }
