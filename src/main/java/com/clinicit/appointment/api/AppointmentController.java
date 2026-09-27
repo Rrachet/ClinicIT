@@ -53,4 +53,9 @@ public class AppointmentController {
     public AppointmentResponse arrive(@PathVariable UUID id) {
         return service.arrive(id);
     }
+
+    @PostMapping("/{id}/no-show")
+    public AppointmentResponse noShow(@PathVariable UUID id) {
+        return service.markNoShow(id);
+    }
 }
