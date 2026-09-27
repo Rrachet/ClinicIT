@@ -35,6 +35,7 @@ Identity   Scheduling   Queue
 - patient: patient records and search
 - appointment: booking and lifecycle
 - queue: token generation and state transitions
+- realtime: STOMP/WebSocket delivery of queue events and its security (see [REALTIME.md](REALTIME.md)); the queue module publishes through a port and never depends on it
 - notification: notification intents and delivery adapters
 - analytics: operational metrics
 - ai: future model integration boundary
