@@ -71,8 +71,8 @@ public class AppointmentService {
         var to = date.plusDays(1).atStartOfDay();
 
         return (doctorId == null
-                ? repository.findByClinicIdAndScheduledAtBetweenOrderByScheduledAtAsc(clinicId, from, to)
-                : repository.findByClinicIdAndDoctorIdAndScheduledAtBetweenOrderByScheduledAtAsc(clinicId, doctorId, from, to))
+                ? repository.findForClinicInRange(clinicId, from, to)
+                : repository.findForDoctorInRange(clinicId, doctorId, from, to))
                 .stream()
                 .map(AppointmentResponse::from)
                 .toList();

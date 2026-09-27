@@ -95,6 +95,22 @@ class AppointmentServiceIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void dayListingExcludesNextDaysMidnight() {
+        Appointment lastSlot = appointmentOn(doctor, patient(clinic, "Late"), TODAY);
+        lastSlot.setScheduledAt(LocalDateTime.of(TODAY, LocalTime.of(23, 59)));
+        appointments.save(lastSlot);
+        Appointment nextMidnight = appointmentOn(doctor, patient(clinic, "Midnight"), TODAY);
+        nextMidnight.setScheduledAt(TODAY.plusDays(1).atStartOfDay());
+        appointments.save(nextMidnight);
+
+        assertThat(service.forDate(clinic.getId(), null, TODAY)).extracting("id").containsExactly(lastSlot.getId());
+        assertThat(service.forDate(clinic.getId(), doctor.getId(), TODAY)).extracting("id")
+                .containsExactly(lastSlot.getId());
+        assertThat(service.forDate(clinic.getId(), null, TODAY.plusDays(1))).extracting("id")
+                .containsExactly(nextMidnight.getId());
+    }
+
+    @Test
     void scheduledTimeIsStoredAsClinicWallClockRegardlessOfJvmZone() {
         // Regression: hibernate.jdbc.time_zone=UTC used to shift LocalDateTime by the JVM
         // offset, so 16:00 was stored as 10:30 on an IST server or 23:00 on a US one.

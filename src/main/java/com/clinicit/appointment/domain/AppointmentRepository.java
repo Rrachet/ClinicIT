@@ -17,16 +17,21 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     @Query("select a from Appointment a where a.id = :id")
     Optional<Appointment> findByIdForUpdate(UUID id);
 
-    List<Appointment> findByClinicIdAndDoctorIdAndScheduledAtBetweenOrderByScheduledAtAsc(
-            UUID clinicId,
-            UUID doctorId,
-            LocalDateTime from,
-            LocalDateTime to
-    );
+    /** Appointments in [from, to): a day's listing must not include the next day's 00:00 slot. */
+    @Query("""
+            select a from Appointment a
+            where a.clinicId = :clinicId
+              and a.doctorId = :doctorId
+              and a.scheduledAt >= :from and a.scheduledAt < :to
+            order by a.scheduledAt
+            """)
+    List<Appointment> findForDoctorInRange(UUID clinicId, UUID doctorId, LocalDateTime from, LocalDateTime to);
 
-    List<Appointment> findByClinicIdAndScheduledAtBetweenOrderByScheduledAtAsc(
-            UUID clinicId,
-            LocalDateTime from,
-            LocalDateTime to
-    );
+    @Query("""
+            select a from Appointment a
+            where a.clinicId = :clinicId
+              and a.scheduledAt >= :from and a.scheduledAt < :to
+            order by a.scheduledAt
+            """)
+    List<Appointment> findForClinicInRange(UUID clinicId, LocalDateTime from, LocalDateTime to);
 }
