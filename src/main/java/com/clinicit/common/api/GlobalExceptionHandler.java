@@ -1,6 +1,9 @@
 package com.clinicit.common.api;
 
+import com.clinicit.common.domain.AuthenticationFailedException;
 import com.clinicit.common.domain.BusinessRuleException;
+import com.clinicit.common.domain.ForbiddenException;
+import com.clinicit.common.domain.InvalidRequestException;
 import com.clinicit.common.domain.NotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
@@ -13,6 +16,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -59,6 +64,34 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(ConstraintViolationException.class)
     ResponseEntity<Object> handleConstraintViolation(ConstraintViolationException ex, HttpServletRequest request) {
         return body(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(InvalidRequestException.class)
+    ResponseEntity<Object> handleInvalidRequest(InvalidRequestException ex, HttpServletRequest request) {
+        return body(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", ex.getMessage(), request.getRequestURI());
+    }
+
+    @ExceptionHandler(AuthenticationFailedException.class)
+    ResponseEntity<Object> handleLoginFailed(AuthenticationFailedException ex, HttpServletRequest request) {
+        return body(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", ex.getMessage(), request.getRequestURI());
+    }
+
+    // Security exceptions thrown inside controllers (e.g. by @PreAuthorize) reach this advice
+    // before Spring Security's filters, so they are mapped here; otherwise the catch-all
+    // below would turn them into 500s.
+    @ExceptionHandler(AuthenticationException.class)
+    ResponseEntity<Object> handleUnauthenticated(AuthenticationException ex, HttpServletRequest request) {
+        return body(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication required", request.getRequestURI());
+    }
+
+    @ExceptionHandler(AccessDeniedException.class)
+    ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, HttpServletRequest request) {
+        return body(HttpStatus.FORBIDDEN, "FORBIDDEN", "Access denied", request.getRequestURI());
+    }
+
+    @ExceptionHandler(ForbiddenException.class)
+    ResponseEntity<Object> handleForbidden(ForbiddenException ex, HttpServletRequest request) {
+        return body(HttpStatus.FORBIDDEN, "FORBIDDEN", ex.getMessage(), request.getRequestURI());
     }
 
     @ExceptionHandler(NotFoundException.class)

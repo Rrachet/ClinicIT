@@ -1,7 +1,6 @@
 package com.clinicit.queue.api;
 
-import jakarta.validation.constraints.NotNull;
-
 import java.util.UUID;
 
-public record CallNextRequest(@NotNull UUID doctorId) {}
+/** @param doctorId required for front desk; a doctor may omit it to call their own next patient */
+public record CallNextRequest(UUID doctorId) {}

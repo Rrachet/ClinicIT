@@ -5,6 +5,7 @@ import com.clinicit.clinic.domain.Clinic;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.common.domain.BusinessRuleException;
 import com.clinicit.common.domain.InvalidStateTransitionException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.queue.api.QueueEntryResponse;
 import com.clinicit.queue.domain.QueueStatus;
 import com.clinicit.support.PostgresIntegrationTest;
@@ -37,12 +38,14 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
     ExecutorService pool;
     Clinic clinic;
     DoctorProfile doctor;
+    Actor desk;
 
     @BeforeEach
     void setUp() {
         pool = Executors.newFixedThreadPool(THREADS);
         clinic = clinic("Busy Clinic");
         doctor = doctor(clinic, "Dr. Sharma");
+        desk = frontDesk(clinic);
     }
 
     @AfterEach
@@ -92,7 +95,7 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
                 .mapToObj(i -> arrivedAppointment(i % 2 == 0 ? doctor : second, patient(clinic, "P" + i)).getId())
                 .toList();
 
-        List<Outcome<QueueEntryResponse>> outcomes = race(appointmentIds, queue::join);
+        List<Outcome<QueueEntryResponse>> outcomes = race(appointmentIds, id -> queue.join(desk, id));
 
         assertThat(outcomes).allMatch(Outcome::succeeded);
         assertThat(outcomes).extracting(o -> o.value().tokenNumber())
@@ -107,7 +110,7 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
         Appointment appointment = arrivedAppointment(doctor, patient(clinic, "Double Click"));
         List<UUID> sameIdManyTimes = IntStream.range(0, 10).mapToObj(i -> appointment.getId()).toList();
 
-        List<Outcome<QueueEntryResponse>> outcomes = race(sameIdManyTimes, queue::join);
+        List<Outcome<QueueEntryResponse>> outcomes = race(sameIdManyTimes, id -> queue.join(desk, id));
 
         assertThat(outcomes).filteredOn(Outcome::succeeded).hasSize(1);
         assertThat(outcomes).filteredOn(o -> !o.succeeded())
@@ -120,11 +123,11 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
     @Test
     void concurrentCallNextCallsExactlyOnePatient() throws Exception {
         for (int i = 0; i < 10; i++) {
-            queue.join(arrivedAppointment(doctor, patient(clinic, "P" + i)).getId());
+            queue.join(desk, arrivedAppointment(doctor, patient(clinic, "P" + i)).getId());
         }
         List<UUID> sameDoctor = IntStream.range(0, 10).mapToObj(i -> doctor.getId()).toList();
 
-        List<Outcome<QueueEntryResponse>> outcomes = race(sameDoctor, queue::callNext);
+        List<Outcome<QueueEntryResponse>> outcomes = race(sameDoctor, id -> queue.callNext(desk, id));
 
         assertThat(outcomes).filteredOn(Outcome::succeeded).hasSize(1);
         assertThat(outcomes.stream().filter(Outcome::succeeded).findFirst().orElseThrow().value().tokenNumber())
@@ -137,8 +140,8 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
 
     @Test
     void callNextPassesOverAHeadOfQueueRowLockedByAnotherTransaction() throws Exception {
-        QueueEntryResponse first = queue.join(arrivedAppointment(doctor, patient(clinic, "Being Skipped")).getId());
-        QueueEntryResponse second = queue.join(arrivedAppointment(doctor, patient(clinic, "Next In Line")).getId());
+        QueueEntryResponse first = queue.join(desk, arrivedAppointment(doctor, patient(clinic, "Being Skipped")).getId());
+        QueueEntryResponse second = queue.join(desk, arrivedAppointment(doctor, patient(clinic, "Next In Line")).getId());
 
         CountDownLatch locked = new CountDownLatch(1);
         CountDownLatch release = new CountDownLatch(1);
@@ -156,26 +159,26 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
         assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
 
         // Must not block on #1 and must not come back empty: it calls #2.
-        QueueEntryResponse called = pool.submit(() -> queue.callNext(doctor.getId())).get(5, TimeUnit.SECONDS);
+        QueueEntryResponse called = pool.submit(() -> queue.callNext(desk, doctor.getId())).get(5, TimeUnit.SECONDS);
 
         release.countDown();
         holder.get(10, TimeUnit.SECONDS);
 
         assertThat(called.id()).isEqualTo(second.id());
-        assertThat(queue.get(first.id()).status()).isEqualTo(QueueStatus.WAITING);
+        assertThat(queue.get(desk, first.id()).status()).isEqualTo(QueueStatus.WAITING);
     }
 
     @Test
     void concurrentSkipAndStartOfTheSameEntryHaveOneWinner() throws Exception {
-        QueueEntryResponse entry = queue.join(arrivedAppointment(doctor, patient(clinic, "Contested")).getId());
-        queue.callNext(doctor.getId());
+        QueueEntryResponse entry = queue.join(desk, arrivedAppointment(doctor, patient(clinic, "Contested")).getId());
+        queue.callNext(desk, doctor.getId());
 
-        List<Function<UUID, QueueEntryResponse>> actions = List.of(queue::skip, queue::startConsultation);
+        List<Function<UUID, QueueEntryResponse>> actions = List.of(id -> queue.skip(desk, id), id -> queue.startConsultation(desk, id));
         List<Outcome<QueueEntryResponse>> outcomes = race(actions, action -> action.apply(entry.id()));
 
         // Both are legal from CALLED, but only one can happen; the loser then sees the new state.
         assertThat(outcomes).filteredOn(Outcome::succeeded).hasSize(1);
-        QueueStatus finalStatus = queue.get(entry.id()).status();
+        QueueStatus finalStatus = queue.get(desk, entry.id()).status();
         assertThat(finalStatus).isIn(QueueStatus.SKIPPED, QueueStatus.IN_CONSULTATION);
         assertThat(appointmentStatus(entry.appointmentId()).name()).isEqualTo(finalStatus.name());
     }

@@ -19,6 +19,8 @@ public interface DoctorProfileRepository extends JpaRepository<DoctorProfile, UU
      * moment are serialised per doctor instead of both calling a patient.
      */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select d from DoctorProfile d where d.id = :id")
-    Optional<DoctorProfile> findByIdForUpdate(UUID id);
+    @Query("select d from DoctorProfile d where d.id = :id and d.clinicId = :clinicId")
+    Optional<DoctorProfile> findByIdAndClinicIdForUpdate(UUID id, UUID clinicId);
+
+    Optional<DoctorProfile> findByIdAndClinicId(UUID id, UUID clinicId);
 }

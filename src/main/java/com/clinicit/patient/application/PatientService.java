@@ -1,6 +1,7 @@
 package com.clinicit.patient.application;
 
 import com.clinicit.common.domain.NotFoundException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.api.PatientRequest;
 import com.clinicit.patient.api.PatientResponse;
 import com.clinicit.patient.domain.Patient;
@@ -11,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.UUID;
 
+/** Patients always belong to, and are only visible within, the caller's clinic. */
 @Service
 @Transactional
 public class PatientService {
@@ -21,9 +23,9 @@ public class PatientService {
         this.repository = repository;
     }
 
-    public PatientResponse create(PatientRequest request) {
+    public PatientResponse create(Actor actor, PatientRequest request) {
         Patient patient = new Patient();
-        patient.setClinicId(request.clinicId());
+        patient.setClinicId(actor.clinicId());
         patient.setFullName(request.fullName().trim());
         patient.setPhone(request.phone().trim());
         patient.setDateOfBirth(request.dateOfBirth());
@@ -32,16 +34,16 @@ public class PatientService {
     }
 
     @Transactional(readOnly = true)
-    public PatientResponse get(UUID id) {
-        return repository.findById(id)
+    public PatientResponse get(Actor actor, UUID id) {
+        return repository.findByIdAndClinicId(id, actor.clinicId())
                 .map(PatientResponse::from)
                 .orElseThrow(() -> new NotFoundException("Patient not found"));
     }
 
     @Transactional(readOnly = true)
-    public List<PatientResponse> search(UUID clinicId, String name) {
+    public List<PatientResponse> search(Actor actor, String name) {
         return repository
-                .findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullNameAsc(clinicId, name)
+                .findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullNameAsc(actor.clinicId(), name)
                 .stream()
                 .map(PatientResponse::from)
                 .toList();

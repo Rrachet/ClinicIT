@@ -29,8 +29,8 @@ class QueueSchemaConstraintsIntegrationTest extends PostgresIntegrationTest {
     void setUp() {
         clinic = clinic("City Clinic");
         doctor = doctor(clinic, "Dr. Sharma");
-        first = queue.join(arrivedAppointment(doctor, patient(clinic, "A")).getId());
-        second = queue.join(arrivedAppointment(doctor, patient(clinic, "B")).getId());
+        first = queue.join(frontDesk(clinic), arrivedAppointment(doctor, patient(clinic, "A")).getId());
+        second = queue.join(frontDesk(clinic), arrivedAppointment(doctor, patient(clinic, "B")).getId());
     }
 
     @Test

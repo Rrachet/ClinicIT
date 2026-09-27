@@ -3,6 +3,7 @@ package com.clinicit.queue.application;
 import com.clinicit.clinic.domain.Clinic;
 import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.common.domain.BusinessRuleException;
+import com.clinicit.identity.domain.Actor;
 import com.clinicit.queue.api.QueueEntryResponse;
 import com.clinicit.support.PostgresIntegrationTest;
 import org.junit.jupiter.api.Test;
@@ -36,9 +37,12 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
 
     @Autowired QueueService queue;
 
+    Actor desk;
+
     @Test
     void mixedConcurrentOperationsNeverDeadlockOrBreakInvariants() throws Exception {
         Clinic clinic = clinic("Stress Clinic");
+        desk = frontDesk(clinic);
         List<DoctorProfile> doctorList = List.of(
                 doctor(clinic, "Dr. A"), doctor(clinic, "Dr. B"), doctor(clinic, "Dr. C"));
 
@@ -88,21 +92,21 @@ class QueueStressIntegrationTest extends PostgresIntegrationTest {
         if (dice < 3 || entryIds.isEmpty()) {
             UUID appointmentId = notYetJoined.poll();
             if (appointmentId != null) {
-                entryIds.add(queue.join(appointmentId).id());
+                entryIds.add(queue.join(desk, appointmentId).id());
             }
             return;
         }
         if (dice < 5) {
-            queue.callNext(doctorList.get(random.nextInt(doctorList.size())).getId());
+            queue.callNext(desk, doctorList.get(random.nextInt(doctorList.size())).getId());
             return;
         }
         UUID entry = entryIds.get(random.nextInt(entryIds.size()));
         QueueEntryResponse result = switch (dice) {
-            case 5 -> queue.startConsultation(entry);
-            case 6 -> queue.complete(entry);
-            case 7 -> queue.skip(entry);
-            case 8 -> queue.requeue(entry);
-            default -> queue.markNoShow(entry);
+            case 5 -> queue.startConsultation(desk, entry);
+            case 6 -> queue.complete(desk, entry);
+            case 7 -> queue.skip(desk, entry);
+            case 8 -> queue.requeue(desk, entry);
+            default -> queue.markNoShow(desk, entry);
         };
     }
 

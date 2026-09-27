@@ -23,9 +23,11 @@ public interface QueueEntryRepository extends JpaRepository<QueueEntry, UUID> {
             Collection<QueueStatus> statuses
     );
 
+    Optional<QueueEntry> findByIdAndClinicId(UUID id, UUID clinicId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
-    @Query("select q from QueueEntry q where q.id = :id")
-    Optional<QueueEntry> findByIdForUpdate(UUID id);
+    @Query("select q from QueueEntry q where q.id = :id and q.clinicId = :clinicId")
+    Optional<QueueEntry> findByIdAndClinicIdForUpdate(UUID id, UUID clinicId);
 
     /**
      * Next waiting patient for a doctor, locked.

@@ -1,6 +1,9 @@
 package com.clinicit.appointment.api;
 
 import com.clinicit.appointment.application.AppointmentService;
+import com.clinicit.identity.domain.Actor;
+import com.clinicit.identity.security.AnyStaff;
+import com.clinicit.identity.security.FrontDesk;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
@@ -21,41 +24,49 @@ public class AppointmentController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    public AppointmentResponse create(@Valid @RequestBody CreateAppointmentRequest request) {
-        return service.create(request);
+    @FrontDesk
+    public AppointmentResponse create(Actor actor, @Valid @RequestBody CreateAppointmentRequest request) {
+        return service.create(actor, request);
     }
 
     @GetMapping("/{id}")
-    public AppointmentResponse get(@PathVariable UUID id) {
-        return service.get(id);
+    @AnyStaff
+    public AppointmentResponse get(Actor actor, @PathVariable UUID id) {
+        return service.get(actor, id);
     }
 
+    /** Front desk: whole clinic, or one doctor. Doctors: always their own. */
     @GetMapping
+    @AnyStaff
     public List<AppointmentResponse> forDate(
-            @RequestParam UUID clinicId,
+            Actor actor,
             @RequestParam LocalDate date,
             @RequestParam(required = false) UUID doctorId
     ) {
-        return service.forDate(clinicId, doctorId, date);
+        return service.forDate(actor, doctorId, date);
     }
 
     @PostMapping("/{id}/confirm")
-    public AppointmentResponse confirm(@PathVariable UUID id) {
-        return service.confirm(id);
+    @FrontDesk
+    public AppointmentResponse confirm(Actor actor, @PathVariable UUID id) {
+        return service.confirm(actor, id);
     }
 
     @PostMapping("/{id}/cancel")
-    public AppointmentResponse cancel(@PathVariable UUID id) {
-        return service.cancel(id);
+    @FrontDesk
+    public AppointmentResponse cancel(Actor actor, @PathVariable UUID id) {
+        return service.cancel(actor, id);
     }
 
     @PostMapping("/{id}/arrive")
-    public AppointmentResponse arrive(@PathVariable UUID id) {
-        return service.arrive(id);
+    @FrontDesk
+    public AppointmentResponse arrive(Actor actor, @PathVariable UUID id) {
+        return service.arrive(actor, id);
     }
 
     @PostMapping("/{id}/no-show")
-    public AppointmentResponse noShow(@PathVariable UUID id) {
-        return service.markNoShow(id);
+    @FrontDesk
+    public AppointmentResponse noShow(Actor actor, @PathVariable UUID id) {
+        return service.markNoShow(actor, id);
     }
 }

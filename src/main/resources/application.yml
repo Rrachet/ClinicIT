@@ -16,6 +16,15 @@ spring:
 server:
   port: ${PORT:8080}
 
+clinicit:
+  auth:
+    # Absolute lifetime of a login token (ISO-8601 duration); covers one clinic shift.
+    session-ttl: ${CLINICIT_SESSION_TTL:PT12H}
+  # First clinic + admin on an empty database. Set through environment variables only,
+  # never committed: CLINICIT_BOOTSTRAP_ADMIN_EMAIL, CLINICIT_BOOTSTRAP_ADMIN_PASSWORD,
+  # CLINICIT_BOOTSTRAP_CLINIC_NAME (optional: CLINICIT_BOOTSTRAP_ADMIN_NAME,
+  # CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE).
+
 management:
   endpoints:
     web:
