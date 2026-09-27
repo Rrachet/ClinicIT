@@ -172,6 +172,11 @@ SQL fix:
 | `POST /queue-entries` (join), `…/requeue`, `…/no-show` | ✓ | ✓ | |
 | `GET /queue-entries/{id}`, `…/start`, `…/complete`, `…/skip` | ✓ | ✓ | own only |
 | `POST /queues/call-next`, `GET /queues/today` | ✓ | ✓ | own only (`doctorId` optional) |
+| `GET /clinic` | ✓ | ✓ | ✓ |
+| `GET /notifications?appointmentId=`, `POST /notifications/{id}/retry` | ✓ | ✓ | |
+| `GET /analytics/*` | ✓ | ✓ | own figures only |
+| `GET /queues/today/wait-estimates` | ✓ | ✓ | own queue only |
+| `GET /public/queue-status/{code}` | public | public | public |
 
 Doctors can read any patient in their clinic by id. That is the one clinic-wide read a doctor has. Narrowing it to
 "patients with an appointment with me" is a possible later tightening.
@@ -182,8 +187,9 @@ Doctors can read any patient in their clinic by id. That is the one clinic-wide 
 
 - **The code:** 128 random bits per queue entry, handed to that patient by reception. It is not guessable, and it
   is only a read capability.
-- **What it returns:** token, current token, patients ahead, status, and the clinic's and doctor's display names.
-  It returns no patient name, phone number, appointment details or internal ids.
+- **What it returns:** token, current token, patients ahead, status, the clinic's and doctor's display names, and
+  (Phase 8) an estimated wait range while waiting. It returns no patient name, phone number, appointment details,
+  internal ids or model details. A test pins the exact set of fields.
 - **Expiry and caching:** unknown codes and codes from past queue days both return 404. Responses are
   `Cache-Control: no-store`.
 - **Referrers:** the frontend sends `Referrer-Policy: no-referrer`, so the code is never leaked in a Referer header.
@@ -227,9 +233,11 @@ ownership check.
 
 ## Known gaps / next steps
 
-- **No password reset** ("forgot password"). It needs an email or SMS channel, which comes with notifications in
-  Phase 6. Until then an admin can create a new account or, later, reset one.
-- **No audit log** of who changed what. It will be its own piece of work.
+- **No password reset** ("forgot password"). The notification channel exists (Phase 6), but only a development
+  provider is configured and staff have no verified phone or email. For now an admin creates a new account.
+- **Partial audit trail.** Every appointment and queue transition records the acting user in the immutable
+  `operational_events` history (Phase 7). Other changes are not audited: staff accounts, doctor profiles and
+  patient details.
 - **Scoping is enforced in application code plus foreign keys.** PostgreSQL row-level security with a per-request
   `app.clinic_id` setting would add a database-enforced read barrier. It is worth considering once the schema
   settles.

@@ -1,28 +1,35 @@
 # ClinicIT Data Model
 
-Initial entities:
+Tables (Flyway migrations `V1`–`V10` in `src/main/resources/db/migration`):
 
-- Clinic
-- User
-- DoctorProfile
-- Patient
-- Appointment
-- QueueEntry
-- Notification
-- Consultation
+| Table | Holds | Created in | More |
+|---|---|---|---|
+| `patients`, `appointments`, `queue_entries` | patients, appointments, queue entries | V1 (queue reworked in V3) | [QUEUE_ENGINE.md](QUEUE_ENGINE.md) |
+| `clinics`, `doctor_profiles` | clinics, doctors | V2 | |
+| `queue_token_counters` | per clinic/day token counter | V3 | [QUEUE_ENGINE.md](QUEUE_ENGINE.md) |
+| `users`, `auth_sessions` | staff accounts, login sessions | V5 | [SECURITY.md](SECURITY.md) |
+| `login_throttle` | brute-force protection | V6 | [SECURITY.md](SECURITY.md) |
+| `queue_events` | real-time outbox, purged after 7 days | V7 | [REALTIME.md](REALTIME.md) |
+| `notifications` | patient messages (outbox) | V9 | [NOTIFICATIONS.md](NOTIFICATIONS.md) |
+| `operational_events` | immutable lifecycle history | V10 | [ANALYTICS.md](ANALYTICS.md) |
+
+V4 added the clinic-scoped composite foreign keys, and V8 added the queue status-link code.
 
 Relationships:
 
 ```
-Clinic 1 --- N User
-Clinic 1 --- N DoctorProfile
+Clinic 1 --- N UserAccount 1 --- N AuthSession
+Clinic 1 --- N DoctorProfile 0..1 --- 1 UserAccount (a DOCTOR login)
 Clinic 1 --- N Patient
 Patient 1 --- N Appointment
 DoctorProfile 1 --- N Appointment
 Appointment 1 --- 0..1 QueueEntry
-Appointment 1 --- 0..1 Consultation
 Appointment 1 --- N Notification
+Appointment 1 --- N OperationalEvent
 ```
+
+Every clinic-owned row carries `clinic_id`. Composite foreign keys such as `(patient_id, clinic_id)` stop a row from
+pointing at another clinic's data.
 
 ## Key identifiers
 
@@ -86,9 +93,10 @@ Core fields:
 
 Avoid collecting sensitive medical data until a specific clinical-record requirement is designed.
 
-## Consultation
+## Not modelled
 
-Later-phase fields should be intentionally scoped. Clinical data requires stronger access controls, auditability, retention rules, and privacy review.
+There is no consultation record. ClinicIT tracks when a consultation starts and ends, not what happens in it.
+Clinical data would need stronger access controls, auditability, retention rules and a privacy review first.
 
 ## OperationalEvent
 
@@ -107,12 +115,11 @@ Core fields:
 ## Notification
 
 Core fields:
-- id
-- appointment_id
-- channel
-- type
-- status
-- recipient
-- payload/reference
-- created_at
-- sent_at
+- id, clinic_id, appointment_id, queue_entry_id
+- type (APPOINTMENT_CONFIRMED, PATIENT_JOINED_QUEUE, PATIENT_CALLED, PATIENT_NEAR_TURN), channel, status (PENDING, SENT, FAILED)
+- recipient (phone), body (fixed template, no clinical data)
+- dedupe_key (unique: one message per meaningful change)
+- attempts, max_attempts, next_attempt_at, expires_at, last_error
+- provider, provider_message_id, created_at, sent_at, updated_at
+
+Details: [NOTIFICATIONS.md](NOTIFICATIONS.md).

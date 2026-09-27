@@ -5,8 +5,8 @@ figures from that history with plain SQL in PostgreSQL. There is no machine lear
 every number is a count, a time between two recorded events, or a ratio of counts. The same data always gives the
 same answer.
 
-This history is also the foundation for later phases, such as no-show prediction and wait-time estimates. Those
-need facts that current state cannot provide. For example, requeueing a patient clears the entry's `called_at`, but
+This history is also the foundation for the wait-time model (Phase 8, [AI.md](AI.md)) and any future no-show
+prediction. Those need facts that current state cannot provide. For example, requeueing a patient clears the entry's `called_at`, but
 the history still has their first call.
 
 ## Architecture
