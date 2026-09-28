@@ -10,6 +10,8 @@ import { FullPageSpinner } from "@/ui/Spinner";
 import { longDate } from "@/ui/format";
 import { useAsync } from "@/ui/useAsync";
 import { barPercent, delay, duration, hourLabel, hourlyRows, percent } from "./analyticsView";
+import { Bar } from "./Bar";
+import { TrendsPanel } from "./TrendsPanel";
 
 const REFRESH_MS = 60_000;
 
@@ -236,6 +238,9 @@ export function AnalyticsDashboard() {
             )}
           </section>
         </div>
+
+        {/* Keyed by doctor: its own loading and errors, so a slow range never holds up the day's figures. */}
+        <TrendsPanel key={doctorId || "all"} api={api} doctorId={doctorId || undefined} doctorName={selectedDoctor?.displayName} />
       </main>
     </div>
   );
@@ -248,16 +253,5 @@ function Kpi({ label, value, note }: { label: string; value: string; note: strin
       <span className="kpi-value">{value}</span>
       <span className="muted small">{note}</span>
     </div>
-  );
-}
-
-function Bar({ percent: width, label, tone }: { percent: number; label: string; tone?: "muted" | "warn" }) {
-  return (
-    <span className="bar-cell">
-      <span className="bar" aria-hidden>
-        <span className={`bar-fill${tone ? ` bar-${tone}` : ""}`} style={{ width: `${width}%` }} />
-      </span>
-      {label}
-    </span>
   );
 }

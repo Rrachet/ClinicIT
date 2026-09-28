@@ -26,6 +26,14 @@ login=$(curl -fsS http://127.0.0.1:8080/api/v1/auth/login -H 'Content-Type: appl
 token=$(printf '%s' "$login" | python3 -c 'import json,sys; print(json.load(sys.stdin)["accessToken"])')
 curl -fsS http://127.0.0.1:8080/api/v1/clinic -H "Authorization: Bearer $token" | grep -q 'ClinicIT Demo Clinic, Hyderabad'
 
+echo "Demo clinic: today's queue and two weeks of trends"
+today=$(curl -fsS http://127.0.0.1:8080/api/v1/clinic -H "Authorization: Bearer $token" \
+  | python3 -c 'import json,sys; print(json.load(sys.stdin)["today"])')
+curl -fsS "http://127.0.0.1:8080/api/v1/appointments?date=$today" -H "Authorization: Bearer $token" \
+  | python3 -c 'import json,sys; s={a["status"] for a in json.load(sys.stdin)}; assert {"WAITING","CALLED","IN_CONSULTATION"} <= s, s'
+curl -fsS http://127.0.0.1:8080/api/v1/analytics/trends -H "Authorization: Bearer $token" \
+  | python3 -c 'import json,sys; d=json.load(sys.stdin); assert sum(x["completed"] for x in d["days"]) > 0, d'
+
 echo "ML service reachable from the API container"
 docker compose exec -T api bash -c \
   "exec 3<>/dev/tcp/ml/8000 && printf 'GET /health HTTP/1.0\r\nHost: ml\r\n\r\n' >&3 && cat <&3" \

@@ -118,6 +118,8 @@ A **visit** is one queue entry that joined the queue (`WAITING`) that day.
 | Queue length over time | running sum of +1 for `WAITING`/`REQUEUED` and −1 for any event whose `previous_status` is `WAITING` (called, or skipped while waiting), taken at the end of each hour. Hours run from 0 to the current hour today, to 23 for past days, and none for future days |
 | Current queue length | that running sum over the whole day: patients waiting now (for a past day, left waiting at day end) |
 | Doctor utilization | total consultation time ÷ (last completion − first call) for that doctor that day, capped at 1: how busy the doctor was while seeing patients |
+| Completion rate (trends) | completed ÷ (scheduled − cancelled) for that day, capped at 1. Scheduled counts appointments by the day they were for; completed counts visits by the day they joined the queue |
+| Doctor workload (trends) | patients the doctor completed in the range, the days on which they called at least one patient, and the ratio |
 | Utilization of scheduled hours | total consultation time ÷ the doctor's scheduled minutes that day (hours minus break and leave, [SCHEDULING.md](SCHEDULING.md)), capped at 1. Null for doctors without a schedule |
 
 **Edge cases:**
@@ -137,6 +139,7 @@ parameter; one sent anyway is ignored. `date` is a clinic-local ISO date and def
 | `GET /api/v1/analytics/wait-times?date=&doctorId=` | called patients, average/median/p90/max wait, and the same per hour of call (the trend) |
 | `GET /api/v1/analytics/doctors?date=` | every doctor of the clinic: patients called and handled, average wait, average and total consultation time, utilization |
 | `GET /api/v1/analytics/queue?date=&doctorId=` | current queue length; per hour: joined, completed (throughput), waiting at the end of the hour |
+| `GET /api/v1/analytics/trends?from=&to=&doctorId=` | every day of the range (default: the last 14 days, at most 92): scheduled, cancelled, no-shows, checked in, completed, completion rate, no-show rate, median wait, average consultation; and each doctor's workload: patients seen, days worked, per day worked, time with patients |
 | `GET /api/v1/analytics/no-shows?from=&to=&doctorId=` | for appointments scheduled in the range (default: the last 30 days, at most 366): scheduled, cancelled, no-shows, rates, the three kinds of no-show, per day |
 
 **Who sees what:**

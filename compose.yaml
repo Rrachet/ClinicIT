@@ -49,12 +49,11 @@ services:
       CLINICIT_ML_BASE_URL: http://ml:8000
       CLINICIT_CORS_ALLOWED_ORIGINS: http://localhost:3000
       CLINICIT_PUBLIC_APP_URL: http://localhost:3000
-      # First start only (empty database): the first clinic and its admin. Local demo values;
-      # change them in .env. The prod profile never uses these defaults.
-      CLINICIT_BOOTSTRAP_CLINIC_NAME: ${CLINICIT_BOOTSTRAP_CLINIC_NAME:-ClinicIT Demo Clinic, Hyderabad}
-      CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE: Asia/Kolkata
-      CLINICIT_BOOTSTRAP_ADMIN_EMAIL: ${CLINICIT_BOOTSTRAP_ADMIN_EMAIL:-admin@demo.clinicit.local}
-      CLINICIT_BOOTSTRAP_ADMIN_PASSWORD: ${CLINICIT_BOOTSTRAP_ADMIN_PASSWORD:-local-demo-only-2026}
+      # First start only (empty database): the demo clinic with staff logins, patients, two
+      # weeks of history and today's queue (docs/DEMO.md). Every demo login uses this password;
+      # change it in .env. The prod profile refuses to start with demo data enabled.
+      CLINICIT_DEMO_ENABLED: "true"
+      CLINICIT_DEMO_PASSWORD: ${CLINICIT_DEMO_PASSWORD:-local-demo-only-2026}
     ports:
       - "127.0.0.1:8080:8080"
       # 8081 (probes, metrics) stays inside the compose network.

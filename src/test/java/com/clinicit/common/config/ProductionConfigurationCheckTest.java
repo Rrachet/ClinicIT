@@ -81,6 +81,14 @@ class ProductionConfigurationCheckTest {
     }
 
     @Test
+    void demoDataCannotBeEnabledInProduction() {
+        MockEnvironment env = safeProd();
+        env.setProperty("clinicit.demo.enabled", "true");
+        assertThat(ProductionConfigurationCheck.problems(env)).singleElement().asString()
+                .contains("CLINICIT_DEMO_ENABLED must not be set in production");
+    }
+
+    @Test
     void schemaChangesStayWithFlywayAndMlUrlMustBeHttp() {
         MockEnvironment env = safeProd()
                 .withProperty("spring.jpa.hibernate.ddl-auto", "update")

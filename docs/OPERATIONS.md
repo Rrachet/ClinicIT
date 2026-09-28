@@ -17,7 +17,7 @@ There is no Redis, message broker or second database.
 ## Containers
 
 `Dockerfile` (API), `ml/Dockerfile` and `frontend/Dockerfile` build the three images; each runs as a non-root user.
-`compose.yaml` runs all of them with PostgreSQL on one machine for evaluation (see the README). It is **not** a
+`compose.yaml` runs all of them with PostgreSQL on one machine for evaluation, loaded with the demo clinic ([DEMO.md](DEMO.md)). It is **not** a
 production setup: it runs without the `prod` profile and binds every port to 127.0.0.1. CI builds the images and
 smoke-tests the compose stack on every pull request (`scripts/ci/compose-smoke.sh`).
 
@@ -36,7 +36,8 @@ any bean is created (so before migrations) and refuses to start, listing every p
 - `CLINICIT_NOTIFICATIONS_PROVIDER` is missing, or notifications are enabled with the **development** provider, which
   records messages instead of sending them;
 - `spring.jpa.hibernate.ddl-auto` is anything but `validate`/`none` (schema changes go through Flyway only);
-- `CLINICIT_ML_BASE_URL` is set but is not an `http(s)` URL.
+- `CLINICIT_ML_BASE_URL` is set but is not an `http(s)` URL;
+- `CLINICIT_DEMO_ENABLED` is set: demo data ([DEMO.md](DEMO.md)) is for evaluation only.
 
 | Variable | Default (local development only) | |
 |---|---|---|
@@ -49,6 +50,7 @@ any bean is created (so before migrations) and refuses to start, listing every p
 | `CLINICIT_SESSION_TTL` | `PT12H` | staff login lifetime |
 | `PORT`, `MANAGEMENT_PORT` | `8080`, `8081` | public API; internal probes and metrics |
 | `CLINICIT_BOOTSTRAP_*` | *(none)* | first clinic and admin on an empty database |
+| `CLINICIT_DEMO_ENABLED`, `CLINICIT_DEMO_PASSWORD` | `false`, *(none)* | load the demo clinic into an empty database ([DEMO.md](DEMO.md)); refused in prod |
 | `clinicit.public-status.*` | `PT1M`, 300 requests, 20 unknown codes | per-address limit on the patient status page ([SECURITY.md](SECURITY.md#public-patient-status)) |
 
 **Development defaults are safe by construction.** Without the prod profile the app talks to a local database, allows

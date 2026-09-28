@@ -16,6 +16,7 @@ import type {
   QueueEntry,
   Role,
   TimeOff,
+  Trends,
   User,
   WaitEstimates,
   WaitTimes,
@@ -97,6 +98,7 @@ export function clinicApi(http: ApiClient) {
     analyticsWaitTimes: (date?: string, doctorId?: string) =>
       http.get<WaitTimes>("/api/v1/analytics/wait-times", { query: { date, doctorId } }),
     analyticsDoctors: (date?: string) => http.get<DoctorAnalytics>("/api/v1/analytics/doctors", { query: { date } }),
+    analyticsTrends: (doctorId?: string) => http.get<Trends>("/api/v1/analytics/trends", { query: { doctorId } }),
     analyticsQueue: (date?: string, doctorId?: string) =>
       http.get<QueueAnalytics>("/api/v1/analytics/queue", { query: { date, doctorId } }),
 
