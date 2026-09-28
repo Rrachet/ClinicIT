@@ -4,7 +4,7 @@ import type { PublicQueueStatus } from "@/api/types";
 import { apiError, fakeApi } from "@/test/fakeApi";
 import { navigationMock } from "@/test/navigation";
 import { renderWithAuth } from "@/test/render";
-import { PatientStatus } from "./PatientStatus";
+import { PatientStatus, pollDelay } from "./PatientStatus";
 import { statusMessage } from "./statusMessage";
 
 vi.mock("next/navigation", () => navigationMock);
@@ -84,5 +84,29 @@ describe("PatientStatus page", () => {
     api.route("GET /api/v1/public/queue-status/old-code-12345678", () => apiError(404, "NOT_FOUND", "Queue status not found"));
     renderWithAuth(<PatientStatus code="old-code-12345678" />);
     expect(await screen.findByRole("heading", { name: "Link not valid" })).toBeInTheDocument();
+  });
+
+  it("updates by itself when the patient is called, checking more often near the front", async () => {
+    let calls = 0;
+    api.route("GET /api/v1/public/queue-status/code-live-update-1", () => {
+      calls++;
+      return { body: calls < 3 ? { ...base, patientsAhead: 0 } : { ...base, status: "CALLED", patientsAhead: 0 } };
+    });
+    // Normal polling is far too slow for this test: only the "near the front" pace can reach the call.
+    renderWithAuth(<PatientStatus code="code-live-update-1" pollMs={60_000} nearPollMs={40} />);
+
+    expect(await screen.findByRole("heading", { name: "You're next" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "It's your turn" }, { timeout: 2000 })).toBeInTheDocument();
+  });
+});
+
+describe("pollDelay", () => {
+  it("checks often only when the patient is about to be or has just been called", () => {
+    expect(pollDelay(null, 15_000, 5_000)).toBe(15_000);
+    expect(pollDelay({ ...base, patientsAhead: 3 }, 15_000, 5_000)).toBe(15_000);
+    expect(pollDelay({ ...base, patientsAhead: 1 }, 15_000, 5_000)).toBe(5_000);
+    expect(pollDelay({ ...base, patientsAhead: 0 }, 15_000, 5_000)).toBe(5_000);
+    expect(pollDelay({ ...base, status: "CALLED" }, 15_000, 5_000)).toBe(5_000);
+    expect(pollDelay({ ...base, status: "COMPLETED" }, 15_000, 5_000)).toBe(15_000);
   });
 });

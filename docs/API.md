@@ -16,6 +16,7 @@ All endpoints except `POST /api/v1/auth/login`, `GET /api/v1/health` and
 - POST /api/v1/doctors                  (admin) create doctor profile
 - GET  /api/v1/doctors
 - GET  /api/v1/clinic                   the caller's clinic, incl. its clinic-local `today`
+- PUT  /api/v1/clinic                   (admin) rename: `{name}`; the timezone is fixed at setup
 
 ## Patients
 

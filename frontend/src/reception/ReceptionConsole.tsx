@@ -17,6 +17,7 @@ import { NewAppointmentPanel } from "./NewAppointmentPanel";
 import { NowServing } from "./NowServing";
 import { StatusLinkDialog, type LinkTarget } from "./StatusLinkDialog";
 import { RescheduleDialog } from "./RescheduleDialog";
+import { todayCounts } from "./todayCounts";
 import { perform, type ReceptionAction } from "./actions";
 
 /** "Today's Clinic": the front desk's single working screen. */
@@ -111,6 +112,7 @@ export function ReceptionConsole() {
   if (!clinic) return <FullPageSpinner label="Loading today's clinic" />;
 
   const shown = doctorFilter === "all" ? appointments : appointments.filter((a) => a.doctorId === doctorFilter);
+  const counts = todayCounts(shown, (id) => itemForAppointment(live.queue, id)?.status);
   const confirmRequest: ConfirmRequest | null = pending?.action.confirm ?? null;
 
   return (
@@ -121,6 +123,15 @@ export function ReceptionConsole() {
         <ErrorBanner error={appointmentList.error} onRetry={reloadAppointments} />
         <ErrorBanner error={live.error} onRetry={() => void live.reload()} />
         {notice ? <Notice>{notice}</Notice> : null}
+
+        <section aria-label="Today at a glance" className="kpis kpis-compact">
+          <Count label="Appointments" value={counts.total} />
+          <Count label="Expected" value={counts.expected} hint="booked, not here yet" />
+          <Count label="Here" value={counts.here} hint="arrived or waiting" />
+          <Count label="With a doctor" value={counts.withDoctor} />
+          <Count label="Completed" value={counts.completed} />
+          <Count label="Cancelled / no-show" value={counts.missed} />
+        </section>
 
         {doctors.length === 0 ? (
           <Notice>No doctors are set up for this clinic yet. An admin can add them.</Notice>
@@ -201,6 +212,16 @@ export function ReceptionConsole() {
           }}
         />
       ) : null}
+    </div>
+  );
+}
+
+function Count({ label, value, hint }: { label: string; value: number; hint?: string }) {
+  return (
+    <div className="kpi" data-testid={`count-${label}`}>
+      <span className="label">{label}</span>
+      <span className="kpi-value">{value}</span>
+      {hint ? <span className="muted small">{hint}</span> : null}
     </div>
   );
 }

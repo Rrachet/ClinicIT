@@ -9,16 +9,34 @@ import { minuteRange } from "@/queue/waitEstimate";
 import { statusMessage } from "./statusMessage";
 
 const POLL_MS = 15_000;
+/** Near the front (next, or just called) the page checks more often, so the call shows within seconds. */
+const NEAR_POLL_MS = 5_000;
+
+/** How often to check: sooner when the patient is about to be (or has just been) called. */
+export function pollDelay(status: PublicQueueStatus | null, normalMs: number, nearMs: number): number {
+  if (!status) return normalMs;
+  const near = status.status === "CALLED" || (status.status === "WAITING" && status.patientsAhead <= 1);
+  return near ? nearMs : normalMs;
+}
 
 /**
  * Anonymous, mobile-first status page opened from the link reception gives the patient.
  * It polls the public status endpoint; it never touches the staff WebSocket.
  */
-export function PatientStatus({ code, pollMs = POLL_MS }: { code: string; pollMs?: number }) {
+export function PatientStatus({
+  code,
+  pollMs = POLL_MS,
+  nearPollMs = NEAR_POLL_MS,
+}: {
+  code: string;
+  pollMs?: number;
+  nearPollMs?: number;
+}) {
   const { api } = useAuth();
   const [status, setStatus] = useState<PublicQueueStatus | null>(null);
   const [state, setState] = useState<"loading" | "ok" | "invalid" | "offline">("loading");
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null);
+  const delay = pollDelay(status, pollMs, nearPollMs);
 
   useEffect(() => {
     let active = true;
@@ -40,7 +58,7 @@ export function PatientStatus({ code, pollMs = POLL_MS }: { code: string; pollMs
     void refresh();
     const timer = setInterval(() => {
       if (document.visibilityState === "visible") void refresh();
-    }, pollMs);
+    }, delay);
     const onVisible = () => {
       if (document.visibilityState === "visible") void refresh();
     };
@@ -50,7 +68,7 @@ export function PatientStatus({ code, pollMs = POLL_MS }: { code: string; pollMs
       clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [api, code, pollMs]);
+  }, [api, code, delay]);
 
   if (state === "loading") {
     return (
