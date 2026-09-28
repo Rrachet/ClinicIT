@@ -6,6 +6,7 @@ import { router, navigationMock } from "@/test/navigation";
 import { session } from "@/test/fixtures";
 import { renderWithAuth } from "@/test/render";
 import { AccountScreen } from "./AccountScreen";
+import { RequireRole } from "./RequireRole";
 
 vi.mock("next/navigation", () => navigationMock);
 
@@ -27,13 +28,20 @@ describe("AccountScreen", () => {
 
   it("changes the password, then signs out everywhere and explains why", async () => {
     api.route("POST /api/v1/auth/password", () => ({ status: 204 }));
-    renderWithAuth(<AccountScreen />, { session: session("RECEPTIONIST") });
+    // Rendered as the page renders it: signing out unmounts the screen instead of leaving it without a session.
+    renderWithAuth(
+      <RequireRole area="account">
+        <AccountScreen />
+      </RequireRole>,
+      { session: session("RECEPTIONIST") },
+    );
     expect(screen.getByText(/receptionist@city.test · Receptionist/)).toBeInTheDocument();
 
     await fill("old-password-123", "a-brand-new-password", "a-brand-new-password");
     await userEvent.click(screen.getByRole("button", { name: "Change password" }));
 
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login?reason=password-changed"));
+    expect(await screen.findByRole("status")).toBeInTheDocument();
     expect(api.callsTo("POST", "/api/v1/auth/password")[0].body).toEqual({
       currentPassword: "old-password-123",
       newPassword: "a-brand-new-password",
