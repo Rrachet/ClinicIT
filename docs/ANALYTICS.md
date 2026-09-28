@@ -117,7 +117,8 @@ A **visit** is one queue entry that joined the queue (`WAITING`) that day.
 | Throughput | `COMPLETED` events per clinic-local hour |
 | Queue length over time | running sum of +1 for `WAITING`/`REQUEUED` and −1 for any event whose `previous_status` is `WAITING` (called, or skipped while waiting), taken at the end of each hour. Hours run from 0 to the current hour today, to 23 for past days, and none for future days |
 | Current queue length | that running sum over the whole day: patients waiting now (for a past day, left waiting at day end) |
-| Doctor utilization | total consultation time ÷ (last completion − first call) for that doctor that day, capped at 1. **This is a proxy.** Working hours aren't modelled yet, so it measures how busy the doctor was while seeing patients, not against their schedule |
+| Doctor utilization | total consultation time ÷ (last completion − first call) for that doctor that day, capped at 1: how busy the doctor was while seeing patients |
+| Utilization of scheduled hours | total consultation time ÷ the doctor's scheduled minutes that day (hours minus break and leave, [SCHEDULING.md](SCHEDULING.md)), capped at 1. Null for doctors without a schedule |
 
 **Edge cases:**
 - A patient skipped and never called again is a no-show ("left the queue"). They count in Patients but have no
@@ -199,7 +200,7 @@ These tests fail if their safeguard is removed. I checked that by removing each 
 ## Not in this phase
 
 - **Machine learning or predictions**, such as expected wait or no-show risk. The history they need now exists.
-- **Doctor schedules and working hours**, which would make utilization exact.
+- ~~Doctor schedules and working hours~~: done in Phase 10 (utilization of scheduled hours).
 - **Backfill** of pre-Phase-7 appointments, deliberately.
 - **Materialized rollups.** Indexed queries over one clinic-day are fast. Pre-aggregation can come later if
   multi-year range queries need it.

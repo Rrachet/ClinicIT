@@ -25,13 +25,24 @@ All endpoints except `POST /api/v1/auth/login`, `GET /api/v1/health` and
 
 ## Appointments
 
-- POST /api/v1/appointments
+- POST /api/v1/appointments   (`scheduledAt`, or `walkIn: true` for a patient at the desk now)
 - GET /api/v1/appointments/{id}
 - GET /api/v1/appointments?date=&doctorId=   (doctors: always their own)
 - POST /api/v1/appointments/{id}/confirm
 - POST /api/v1/appointments/{id}/cancel
 - POST /api/v1/appointments/{id}/arrive
 - POST /api/v1/appointments/{id}/no-show
+- POST /api/v1/appointments/{id}/reschedule   (booked or confirmed only; same doctor)
+
+## Doctor schedules (Phase 10)
+
+Scheduling rules and refusal codes: [SCHEDULING.md](SCHEDULING.md).
+
+- GET /api/v1/doctors/{id}/schedule   (staff)
+- PUT /api/v1/doctors/{id}/schedule   (admin; replaces the week)
+- POST /api/v1/doctors/{id}/time-off   (admin)
+- DELETE /api/v1/doctors/{id}/time-off/{timeOffId}   (admin)
+- GET /api/v1/doctors/{id}/availability?date=   (staff)
 
 ## Queue
 

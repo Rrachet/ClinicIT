@@ -103,7 +103,7 @@ running on several instances at once is safe. Scheduling can be switched off wit
 `https://app.clinicit.example`.
 - Wildcards and non-origin values (a path or query) are refused at startup. An empty list, the default, allows no
   cross-origin access.
-- Allowed: methods `GET`, `POST`; request headers `Authorization`, `Content-Type`; exposed `WWW-Authenticate`;
+- Allowed: methods `GET`, `POST`, `PUT`, `DELETE` (the last two for doctor schedules); request headers `Authorization`, `Content-Type`; exposed `WWW-Authenticate`;
   preflight cached for 1 hour.
 - `allowCredentials` is **false**. Tokens travel in the `Authorization` header, never in cookies, so the browser
   has no ambient credential to send.

@@ -47,6 +47,7 @@ Core fields:
 - scheduled_at
 - status
 - reason_summary
+- walk_in (Phase 10: booked for "now" at the desk; holds no slot)
 - created_at
 - updated_at
 
@@ -106,11 +107,21 @@ The immutable history of every appointment and queue transition (Phase 7, table 
 Core fields:
 - id, seq
 - clinic_id, appointment_id, queue_entry_id (queue events), doctor_id, patient_id (ids only)
-- event_type: BOOKED, CONFIRMED, ARRIVED, WAITING (joined the queue), CALLED, IN_CONSULTATION, COMPLETED, CANCELLED, SKIPPED, REQUEUED, NO_SHOW
+- event_type: BOOKED, CONFIRMED, ARRIVED, WAITING (joined the queue), CALLED, IN_CONSULTATION, COMPLETED, CANCELLED, SKIPPED, REQUEUED, NO_SHOW, RESCHEDULED (Phase 10: a new time, status unchanged)
 - previous_status
 - occurred_at
 - actor_user_id
-- token_number, scheduled_at (minimal metadata)
+- token_number, scheduled_at (minimal metadata; the new time for RESCHEDULED)
+
+## Doctor schedules (Phase 10)
+
+See [SCHEDULING.md](SCHEDULING.md) for the rules and the time model.
+
+- `doctor_profiles.appointment_minutes`: slot length, 5–120 (default 15)
+- `doctor_working_hours`: (doctor_id, day_of_week) primary key; start_time, end_time, optional break_start/break_end;
+  check constraints keep start < end and the break inside the hours
+- `doctor_time_off`: id, doctor_id, starts_at, ends_at (clinic-local, end exclusive), optional staff-only reason
+- Both reference `doctor_profiles (id, clinic_id)`, so a schedule row can never point at another clinic's doctor
 
 ## Notification
 

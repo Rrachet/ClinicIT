@@ -126,8 +126,10 @@ referenced row. `KEY SHARE` never waits for the `FOR NO KEY UPDATE` locks above,
 lock cycle or block behind one. `joiningIsNotBlockedWhileCallNextHoldsTheDoctorRow` proves it: a check-in completes
 while call-next holds the doctor row, and the same test fails if that lock is changed to `FOR UPDATE`.
 
-**Not a rule: overlapping appointment times.** A doctor may have several appointments at the same time; walk-ins
-make that normal, and doctor schedules aren't modelled. What *is* enforced is one active patient per doctor (below).
+**Appointment times are the scheduling module's concern, not the queue's.** For a doctor with a schedule, booked
+appointments may not overlap and walk-ins hold no slot ([SCHEDULING.md](SCHEDULING.md)); a doctor without one can have
+several appointments at the same time. The queue orders patients by check-in either way. What the queue enforces is
+one active patient per doctor (below).
 
 - **Why lock the doctor row for call-next.** "Check that nobody is active, then call the next patient" must be
   atomic. Two receptionists pressing *Call next* together are serialised per doctor. The second one sees the

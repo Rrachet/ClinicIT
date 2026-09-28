@@ -31,6 +31,7 @@ There is no Redis, message broker or second database. PostgreSQL is the only sto
 | 7 | Immutable operational history and analytics dashboard | [Analytics](docs/ANALYTICS.md) |
 | 8 | AI wait-time prediction (advisory, operational only) | [AI](docs/AI.md), [`ml/`](ml/README.md) |
 | 9 | CI/CD and production hardening: probes, metrics, safe configuration, reliability fixes | [Operations](docs/OPERATIONS.md), [Testing](docs/TESTING.md) |
+| 10 | Doctor scheduling: weekly hours, breaks, leave, slots, walk-ins, rescheduling | [Scheduling](docs/SCHEDULING.md) |
 
 ## Core roles
 
