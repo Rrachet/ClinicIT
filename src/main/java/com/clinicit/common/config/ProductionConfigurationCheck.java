@@ -61,6 +61,10 @@ public class ProductionConfigurationCheck implements EnvironmentPostProcessor {
             }
         }
 
+        if ("true".equalsIgnoreCase(value(env, "clinicit.demo.enabled"))) {
+            problems.add("CLINICIT_DEMO_ENABLED must not be set in production: demo data is for evaluation only");
+        }
+
         String publicUrl = value(env, "clinicit.notifications.status-link-base-url");
         if (publicUrl == null) {
             problems.add("CLINICIT_PUBLIC_APP_URL is not set (used in patients' status links)");

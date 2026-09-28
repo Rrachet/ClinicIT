@@ -56,6 +56,11 @@ clinicit:
     timeout: ${CLINICIT_ML_TIMEOUT:PT0.8S}
     failure-backoff: PT30S
     cache-ttl: PT60S
+  # Demo clinic for evaluation (docs/DEMO.md): loaded on an empty database only; the prod
+  # profile refuses to start with it enabled. The password has no default.
+  demo:
+    enabled: ${CLINICIT_DEMO_ENABLED:false}
+    password: ${CLINICIT_DEMO_PASSWORD:}
   public-status:
     # Per client IP, per window, on the anonymous patient status page. Requests are generous
     # (a waiting room shares one address); unknown codes are few (guessing).
