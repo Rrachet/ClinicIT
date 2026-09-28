@@ -116,6 +116,10 @@ public class DemoData implements ApplicationRunner {
             return;
         }
         transactions.executeWithoutResult(status -> load());
+        // Thousands of rows just arrived in empty tables: without fresh statistics PostgreSQL
+        // plans the first queries badly until autovacuum catches up (measured: 6 s instead of
+        // 40 ms for the no-show flags on 300 days of history). docs/REVIEW.md
+        jdbc.execute("analyze appointments, queue_entries, operational_events, patients, notifications");
         log.info("Loaded the demo clinic '{}'", CLINIC_NAME);
     }
 

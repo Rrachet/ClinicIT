@@ -15,8 +15,11 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<Session>;
   logout: () => Promise<void>;
   /** Drop the session locally, e.g. after the server rejected the token. */
-  endSession: (reason?: "expired") => void;
+  endSession: (reason?: SessionEndReason) => void;
 }
+
+/** Why the sign-in screen is shown again; it explains it to the user. */
+export type SessionEndReason = "expired" | "password-changed";
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
@@ -25,9 +28,9 @@ export function AuthProvider({ children, apiBaseUrl = API_BASE_URL }: { children
   const session = useSyncExternalStore(sessionStore.subscribe, sessionStore.getSnapshot, sessionStore.getServerSnapshot);
 
   const endSession = useCallback(
-    (reason?: "expired") => {
+    (reason?: SessionEndReason) => {
       sessionStore.set(null);
-      router.replace(reason === "expired" ? "/login?reason=expired" : "/login");
+      router.replace(reason ? `/login?reason=${reason}` : "/login");
     },
     [router],
   );

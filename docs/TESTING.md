@@ -67,6 +67,7 @@ reports and the Playwright results (with server logs) are uploaded as artifacts.
 | ML fallback | `WaitTimePredictionIntegrationTest`: service down, timeout, 8 kinds of invalid answer, back-off, cache, clinic scoping, queue operations never call the ML service, and the ML metrics |
 | Production config | `ProductionConfigurationCheckTest`, including starting the real application with `prod` and no configuration |
 | Health | `ObservabilityIntegrationTest` (probes and metrics on the internal port, nothing else exposed, request ids, metrics only after commit); `ProbesWithoutDatabaseTest` (database unreachable: liveness UP, readiness 503) |
+| No-show risk | `NoShowRiskRuleTest` (every threshold); `NoShowRiskIntegrationTest`: flags from a hand-built history, a hand-computed temporal evaluation, **no leakage** (a judged day never sees later days; a no-show recorded late does not count before it was recorded, checked by mutation), roles, clinic isolation, and a flagged patient is booked and served as usual |
 | Demo data | `DemoDataIntegrationTest`: loads completely into an empty database only, logins work, today has every state, history is chronological with gap-free tokens and feeds the trends; the prod profile refuses it |
 | Log safety | `LogSafetyIntegrationTest`: a full flow logs no password, token, phone, name, reason, status code or message text; database errors carry no row contents |
 

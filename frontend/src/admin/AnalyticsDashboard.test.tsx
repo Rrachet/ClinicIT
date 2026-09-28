@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DailySummary, DoctorAnalytics, QueueAnalytics, Trends, WaitTimes } from "@/api/types";
+import type { DailySummary, DoctorAnalytics, NoShowRiskEvaluation, QueueAnalytics, Trends, WaitTimes } from "@/api/types";
 import { RequireRole } from "@/auth/RequireRole";
 import { apiError, fakeApi } from "@/test/fakeApi";
 import { CLINIC, MEHTA, session, SHARMA } from "@/test/fixtures";
@@ -78,6 +78,12 @@ const TRENDS: Trends = {
   ],
 };
 
+const EVALUATION: NoShowRiskEvaluation = {
+  from: "2025-12-10", to: "2026-03-09", appointments: 400, missed: 40, insufficientHistory: 150,
+  flagged: 30, flaggedMissed: 12, missRate: 0.1, flaggedMissRate: 0.4, notFlaggedMissRate: 0.08,
+  recall: 0.3, lift: 4, enoughData: true,
+};
+
 describe("AnalyticsDashboard", () => {
   let api: ReturnType<typeof fakeApi>;
 
@@ -90,7 +96,8 @@ describe("AnalyticsDashboard", () => {
       .route("GET /api/v1/analytics/wait-times", () => ({ body: WAITS }))
       .route("GET /api/v1/analytics/queue", () => ({ body: QUEUE }))
       .route("GET /api/v1/analytics/doctors", () => ({ body: DOCTORS }))
-      .route("GET /api/v1/analytics/trends", () => ({ body: TRENDS }));
+      .route("GET /api/v1/analytics/trends", () => ({ body: TRENDS }))
+      .route("GET /api/v1/no-show-risk/evaluation", () => ({ body: EVALUATION }));
     vi.stubGlobal("fetch", api.fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -120,6 +127,24 @@ describe("AnalyticsDashboard", () => {
     await waitFor(() =>
       expect(api.callsTo("GET", "/api/v1/analytics/trends").some((c) => c.path.includes(`doctorId=${SHARMA.id}`))).toBe(true),
     );
+  });
+
+  it("shows how the no-show flag did on past days, and says when there is too little data", async () => {
+    open();
+    const panel = await screen.findByRole("region", { name: "No-show risk flag · last 90 days" });
+    await within(panel).findByText("Missed when flagged");
+    expect(panel).toHaveTextContent("Missed overall10%40 of 400 booked");
+    expect(panel).toHaveTextContent("Missed when flagged40%30 flagged");
+    expect(within(panel).getByRole("status")).toHaveTextContent("missed 4.0× as often as average");
+    expect(panel).toHaveTextContent("never a reason to refuse or cancel");
+  });
+
+  it("does not give a verdict on the flag without enough data", async () => {
+    api.route("GET /api/v1/no-show-risk/evaluation", () => ({ body: { ...EVALUATION, flagged: 3, enoughData: false } }));
+    open();
+    const panel = await screen.findByRole("region", { name: "No-show risk flag · last 90 days" });
+    await within(panel).findByText("Missed when flagged");
+    expect(within(panel).getByRole("status")).toHaveTextContent("Too few flagged appointments or misses to judge");
   });
 
   it("keeps the day's figures when trends cannot be loaded", async () => {

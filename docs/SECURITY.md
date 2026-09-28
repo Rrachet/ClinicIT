@@ -167,12 +167,17 @@ SQL fix:
 | `GET /doctors` | ✓ | ✓ | ✓ |
 | `POST /patients`, `GET /patients?name=` | ✓ | ✓ | |
 | `GET /patients/{id}` | ✓ | ✓ | ✓ |
-| `POST /appointments`, `…/confirm`, `…/cancel`, `…/arrive`, `…/no-show` | ✓ | ✓ | |
+| `POST /appointments`, `…/confirm`, `…/cancel`, `…/arrive`, `…/no-show`, `…/reschedule` | ✓ | ✓ | |
+| `GET /doctors/{id}/schedule`, `GET /doctors/{id}/availability` | ✓ | ✓ | ✓ |
+| `PUT /doctors/{id}/schedule`, `POST /doctors/{id}/time-off`, `DELETE /doctors/{id}/time-off/{id}` | ✓ | | |
+| `GET /no-show-risk?date=` (advisory) | ✓ | ✓ | |
+| `GET /no-show-risk/evaluation` | ✓ | | |
 | `GET /appointments/{id}`, `GET /appointments?date=` | ✓ | ✓ | own only |
 | `POST /queue-entries` (join), `…/requeue`, `…/no-show` | ✓ | ✓ | |
 | `GET /queue-entries/{id}`, `…/start`, `…/complete`, `…/skip` | ✓ | ✓ | own only |
 | `POST /queues/call-next`, `GET /queues/today` | ✓ | ✓ | own only (`doctorId` optional) |
 | `GET /clinic` | ✓ | ✓ | ✓ |
+| `PUT /clinic` (name only) | ✓ | | |
 | `GET /notifications?appointmentId=`, `POST /notifications/{id}/retry` | ✓ | ✓ | |
 | `GET /analytics/*` | ✓ | ✓ | own figures only |
 | `GET /queues/today/wait-estimates` | ✓ | ✓ | own queue only |

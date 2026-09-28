@@ -12,6 +12,7 @@ and the STOMP WebSocket; it has no server-side logic of its own.
 | Doctor schedules | `/admin/schedules` | ADMIN | — ([SCHEDULING.md](SCHEDULING.md)) |
 | Team and clinic | `/admin/team` | ADMIN | — (doctors, staff accounts and roles, disabling, clinic name) |
 | Sign in | `/login` | — | — |
+| My account (change password) | `/account` (click your name) | every staff role | — (signs out everywhere after a change) |
 
 ## Structure
 

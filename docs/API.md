@@ -84,6 +84,13 @@ Doctors get only their own figures; another doctor's `doctorId` returns 403.
 - GET  /api/v1/analytics/trends?from=&to=&doctorId=   per day: scheduled, completed, completion and no-show rates, median wait,
                                                        avg consultation; per doctor: workload (default 14 days, ≤ 92)
 
+## No-show risk (Phase 12, advisory)
+
+Read-only; no other endpoint looks at it. Rule, evaluation and limits: [NO_SHOW_RISK.md](NO_SHOW_RISK.md).
+
+- GET  /api/v1/no-show-risk?date=                     (front desk) flags for the day's booked and confirmed appointments
+- GET  /api/v1/no-show-risk/evaluation?from=&to=      (admin) how the flag did on past days, each judged as of that morning
+
 ## Wait-time estimates (Phase 8)
 
 Approximate, advisory waits before being called. See [AI.md](AI.md).

@@ -11,6 +11,7 @@ import { longDate } from "@/ui/format";
 import { useAsync } from "@/ui/useAsync";
 import { barPercent, delay, duration, hourLabel, hourlyRows, percent } from "./analyticsView";
 import { Bar } from "./Bar";
+import { NoShowRiskPanel } from "./NoShowRiskPanel";
 import { TrendsPanel } from "./TrendsPanel";
 
 const REFRESH_MS = 60_000;
@@ -170,12 +171,15 @@ export function AnalyticsDashboard() {
                         {d.scheduledMinutes == null ? (
                           <span className="muted">No schedule</span>
                         ) : (
-                          <span className="bar-cell">
-                            <span className="bar" aria-hidden>
-                              <span className="bar-fill" style={{ width: `${barPercent(d.scheduledUtilization ?? null, 1)}%` }} />
+                          <>
+                            <span className="bar-cell">
+                              <span className="bar" aria-hidden>
+                                <span className="bar-fill" style={{ width: `${barPercent(d.scheduledUtilization ?? null, 1)}%` }} />
+                              </span>
+                              {percent(d.scheduledUtilization ?? null)}
                             </span>
-                            {percent(d.scheduledUtilization ?? null)} of {duration(d.scheduledMinutes * 60)}
-                          </span>
+                            <span className="muted small block"> of {duration(d.scheduledMinutes * 60)}</span>
+                          </>
                         )}
                       </td>
                     </tr>
@@ -241,6 +245,7 @@ export function AnalyticsDashboard() {
 
         {/* Keyed by doctor: its own loading and errors, so a slow range never holds up the day's figures. */}
         <TrendsPanel key={doctorId || "all"} api={api} doctorId={doctorId || undefined} doctorName={selectedDoctor?.displayName} />
+        <NoShowRiskPanel api={api} />
       </main>
     </div>
   );

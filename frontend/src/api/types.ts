@@ -328,3 +328,28 @@ export interface Trends {
   days: TrendDay[];
   doctors: DoctorLoad[];
 }
+
+/** Advisory only (docs/NO_SHOW_RISK.md): never a reason to refuse or cancel care. */
+export interface NoShowRisk {
+  appointmentId: string;
+  level: "UNKNOWN" | "TYPICAL" | "ELEVATED";
+  priorAppointments: number;
+  priorMissed: number;
+  reason: string;
+}
+
+export interface NoShowRiskEvaluation {
+  from: string;
+  to: string;
+  appointments: number;
+  missed: number;
+  insufficientHistory: number;
+  flagged: number;
+  flaggedMissed: number;
+  missRate: number | null;
+  flaggedMissRate: number | null;
+  notFlaggedMissRate: number | null;
+  recall: number | null;
+  lift: number | null;
+  enoughData: boolean;
+}
