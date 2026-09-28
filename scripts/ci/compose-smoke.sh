@@ -32,7 +32,11 @@ docker compose exec -T api bash -c \
   | grep -q '200 OK'
 
 echo "Web app"
-headers=$(curl -fsS -D - -o /dev/null http://127.0.0.1:3000/login)
+# The web container has no healthcheck: give Next.js a moment to start listening.
+for _ in $(seq 1 30); do
+  headers=$(curl -fsS -D - -o /dev/null http://127.0.0.1:3000/login 2>/dev/null) && break
+  sleep 1
+done
 printf '%s' "$headers" | grep -qi 'content-security-policy:.*http://localhost:8080'
 
 echo "Management port not published"
