@@ -15,7 +15,7 @@ export function LoginScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
-  const expired = useSearchParams().get("reason") === "expired";
+  const reason = useSearchParams().get("reason");
 
   useEffect(() => {
     if (session) router.replace(homeFor(session.user.role));
@@ -45,7 +45,10 @@ export function LoginScreen() {
       <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
         <p className="brand">ClinicIT</p>
         <h1 id="login-title">Sign in</h1>
-        {expired ? <Notice>Your session ended. Please sign in again.</Notice> : null}
+        {reason === "expired" ? <Notice>Your session ended. Please sign in again.</Notice> : null}
+        {reason === "password-changed" ? (
+          <Notice>Password changed. You were signed out everywhere; sign in with your new password.</Notice>
+        ) : null}
         <ErrorBanner error={error} />
         <label className="field">
           <span>Email</span>

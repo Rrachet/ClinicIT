@@ -49,7 +49,11 @@ export function AppHeader({ title, clinicName, day, feed }: { title: string; cli
             {FEED_TEXT[feed]}
           </span>
         ) : null}
-        {session ? <span className="muted">{session.user.fullName}</span> : null}
+        {session ? (
+          <Link href="/account" className="muted" aria-current={pathname === "/account" ? "page" : undefined}>
+            {session.user.fullName}
+          </Link>
+        ) : null}
         <button type="button" className="link-button" onClick={() => void logout()}>
           Sign out
         </button>
