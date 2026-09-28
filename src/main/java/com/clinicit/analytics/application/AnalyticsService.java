@@ -7,6 +7,7 @@ import com.clinicit.analytics.api.QueueAnalyticsResponse;
 import com.clinicit.analytics.api.WaitTimesResponse;
 import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
+import com.clinicit.schedule.application.DoctorScheduleService;
 import com.clinicit.common.domain.InvalidRequestException;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.identity.domain.Actor;
@@ -75,11 +76,14 @@ public class AnalyticsService {
     private final JdbcTemplate jdbc;
     private final ClinicTime clinicTime;
     private final DoctorProfileRepository doctors;
+    private final DoctorScheduleService schedules;
 
-    public AnalyticsService(JdbcTemplate jdbc, ClinicTime clinicTime, DoctorProfileRepository doctors) {
+    public AnalyticsService(JdbcTemplate jdbc, ClinicTime clinicTime, DoctorProfileRepository doctors,
+                            DoctorScheduleService schedules) {
         this.jdbc = jdbc;
         this.clinicTime = clinicTime;
         this.doctors = doctors;
+        this.schedules = schedules;
     }
 
     public DailySummaryResponse summary(Actor actor, LocalDate requestedDate, UUID requestedDoctorId) {
@@ -199,8 +203,21 @@ public class AnalyticsService {
                             seconds(rs.getObject("avg_wait")),
                             seconds(rs.getObject("avg_consultation")),
                             consultation,
-                            utilization);
+                            utilization,
+                            null,
+                            null);
                 }, params.toArray());
+
+        // Against the schedule, for doctors who have one: consultation time as a share of the
+        // minutes they were due to see patients (hours minus break and time off).
+        rows = rows.stream().map(row -> doctors.findByIdAndClinicId(row.doctorId(), actor.clinicId())
+                        .flatMap(doctor -> schedules.forDate(doctor, scope.date()).workingMinutes(scope.date()))
+                        .map(minutes -> row.withSchedule(minutes,
+                                minutes == 0 || row.consultationSeconds() == null
+                                        ? null
+                                        : Math.min(1.0, row.consultationSeconds() / (minutes * 60.0))))
+                        .orElse(row))
+                .toList();
 
         return new DoctorAnalyticsResponse(scope.date(), rows);
     }

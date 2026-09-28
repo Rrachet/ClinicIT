@@ -33,6 +33,53 @@ export interface Doctor {
   clinicId: string;
   displayName: string;
   specialization: string | null;
+  /** Length of one appointment slot (minutes). */
+  appointmentMinutes?: number;
+}
+
+export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
+
+/** Clinic-local times "HH:mm[:ss]". A day without an entry is a day off. */
+export interface WorkingDay {
+  dayOfWeek: DayOfWeek;
+  start: string;
+  end: string;
+  breakStart: string | null;
+  breakEnd: string | null;
+}
+
+export interface TimeOff {
+  id: string;
+  startsAt: string;
+  endsAt: string;
+  reason: string | null;
+}
+
+export interface DoctorSchedule {
+  doctorId: string;
+  appointmentMinutes: number;
+  weeklyHours: WorkingDay[];
+  timeOff: TimeOff[];
+}
+
+export type Unavailable =
+  | "DAY_OFF"
+  | "OUTSIDE_HOURS"
+  | "ON_BREAK"
+  | "TIME_OFF"
+  | "IN_THE_PAST"
+  | "SLOT_TAKEN"
+  | "NOT_WORKING_TODAY";
+
+export interface Availability {
+  doctorId: string;
+  date: string;
+  /** false: the doctor has no weekly hours yet, so any time can be booked. */
+  scheduled: boolean;
+  appointmentMinutes: number;
+  hours: { start: string; end: string; breakStart: string | null; breakEnd: string | null } | null;
+  timeOff: { startsAt: string; endsAt: string }[];
+  slots: { start: string; end: string; available: boolean; reason: Unavailable | null }[];
 }
 
 export interface Patient {
@@ -64,6 +111,8 @@ export interface Appointment {
   scheduledAt: string;
   status: AppointmentStatus;
   reasonSummary: string | null;
+  /** Booked for "now" at the desk; holds no slot. */
+  walkIn?: boolean;
 }
 
 export type QueueStatus = "WAITING" | "CALLED" | "IN_CONSULTATION" | "COMPLETED" | "SKIPPED" | "NO_SHOW";
@@ -213,6 +262,9 @@ export interface DoctorStats {
   averageConsultationSeconds: number | null;
   consultationSeconds: number | null;
   utilization: number | null;
+  /** Minutes scheduled to see patients that day; null when the doctor has no schedule. */
+  scheduledMinutes?: number | null;
+  scheduledUtilization?: number | null;
 }
 
 export interface DoctorAnalytics {

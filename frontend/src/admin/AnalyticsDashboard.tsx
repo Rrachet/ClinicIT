@@ -145,7 +145,8 @@ export function AnalyticsDashboard() {
                     <th scope="col" className="num">Patients seen</th>
                     <th scope="col" className="num">Avg wait</th>
                     <th scope="col" className="num">Avg consultation</th>
-                    <th scope="col">Utilization</th>
+                    <th scope="col">Busy while seeing patients</th>
+                    <th scope="col">Of scheduled hours</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -163,13 +164,27 @@ export function AnalyticsDashboard() {
                           {percent(d.utilization)}
                         </span>
                       </td>
+                      <td>
+                        {d.scheduledMinutes == null ? (
+                          <span className="muted">No schedule</span>
+                        ) : (
+                          <span className="bar-cell">
+                            <span className="bar" aria-hidden>
+                              <span className="bar-fill" style={{ width: `${barPercent(d.scheduledUtilization ?? null, 1)}%` }} />
+                            </span>
+                            {percent(d.scheduledUtilization ?? null)} of {duration(d.scheduledMinutes * 60)}
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             )}
             <p className="muted small">
-              Utilization: time in consultation ÷ time from the doctor&apos;s first call to their last completed patient.
+              Busy while seeing patients: time in consultation ÷ time from the doctor&apos;s first call to their last
+              completed patient. Of scheduled hours: time in consultation ÷ the doctor&apos;s working hours that day,
+              less the break and leave (only for doctors with a schedule).
             </p>
           </section>
 

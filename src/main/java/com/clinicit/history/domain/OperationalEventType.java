@@ -18,7 +18,9 @@ public enum OperationalEventType {
     CANCELLED,
     SKIPPED,
     REQUEUED,
-    NO_SHOW;
+    NO_SHOW,
+    /** A booked or confirmed appointment moved to another time (the status does not change). */
+    RESCHEDULED;
 
     public static OperationalEventType ofTransition(AppointmentStatus from, AppointmentStatus to) {
         if (from == AppointmentStatus.SKIPPED && to == AppointmentStatus.WAITING) {

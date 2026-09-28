@@ -28,10 +28,12 @@ frontend/src/
               waitEstimate.ts, useWaitEstimates.ts  estimated waits: wording, and a debounced
                               refetch only when a doctor's queue materially changes
   reception/  ReceptionConsole, NowServing, AppointmentTable, NewAppointmentPanel,
+              RescheduleDialog, SlotPicker (free slots from the doctor's availability),
               actions.ts (buttons per status), workflows.ts (book / walk-in)
   doctor/     DoctorConsole
   patient/    PatientStatus, statusMessage.ts
-  admin/      AnalyticsDashboard, analyticsView.ts (pure formatting)
+  admin/      AnalyticsDashboard, analyticsView.ts (pure formatting),
+              ScheduleEditor (/admin/schedules), scheduleForm.ts (pure week/leave helpers)
   ui/         Button, ConfirmDialog, Feedback (error/empty/notice), StatusBadge, AppHeader, format, useAsync
   app/        thin route files only
 ```
@@ -120,8 +122,11 @@ endpoints.
   - The token is the biggest thing on every screen.
   - Reception keeps one screen: doctor cards with the "Now serving" token and a Call button for each doctor, the
     day's appointments with the next action as the primary button, and a booking panel that is always visible.
-  - For a patient at the desk, "Patient is here now" books, confirms, marks arrived and queues in one submit.
-    These are four normal API calls, each validated by the server.
+  - For a patient at the desk, "Patient is here now" books a walk-in, confirms, marks arrived and queues in one
+    submit. These are four normal API calls, each validated by the server. A walk-in is booked for the server's
+    "now", so there is no time to pick.
+  - A later booking offers only the doctor's free slots when the doctor has a schedule, and a plain time field
+    when not ([SCHEDULING.md](SCHEDULING.md)). *Reschedule* uses the same picker.
 - **Which buttons appear:** they follow the backend's state machine (`reception/actions.ts`) as hints only. If
   the server disagrees, its message is shown.
 - **Confirmation:** cancel, both kinds of no-show, and the doctor's "Patient not here" (skip) all ask first, and
@@ -183,6 +188,7 @@ tested by mistake.
 |---|---|
 | `vertical-slice` | Receptionist and doctor sign in → register patient → book → confirm → arrive → join → call next → doctor's screen updates live (no reload) → start → complete → reception sees it live |
 | `workflows` | Walk-in check-in, with the patient following on a phone (anonymous, polling, no staff calls) through "You're next" and "It's your turn" · skip, back in queue, no-show and cancel, with confirmations · no-show for a confirmed patient who never came · a doctor sees only their own queue · role gating, wrong password, and sign-out revoking the token on the server |
+| `scheduling` | An admin sets a doctor's week, appointment length and a day of leave in the Schedules screen; reception gets "No free slots" on the leave day, the first free slot on the next day, and the following slot once that one is booked |
 | `analytics` | A walk-in booked and called at reception, then completed, shows up in the admin's dashboard for that doctor · receptionists have no Analytics link and are redirected from `/admin` |
 | `wait-estimates` | The real ML service answers with its model; reception and the patient see estimates that update as the queue moves |
 | `visual-review` | Opt-in (`CAPTURE_SCREENSHOTS=1`): screenshots of all screens for review |

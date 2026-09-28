@@ -169,6 +169,44 @@ describe("ReceptionConsole", () => {
     await waitFor(() => expect(api.callsTo("POST", "/api/v1/appointments/booked/cancel")).toHaveLength(1));
   });
 
+  it("reschedules a booked appointment to a free slot of the same doctor", async () => {
+    api
+      .route(`GET /api/v1/doctors/${SHARMA.id}/availability`, () => ({
+        body: {
+          doctorId: SHARMA.id, date: CLINIC.today, scheduled: true, appointmentMinutes: 15,
+          hours: { start: "09:00:00", end: "17:00:00", breakStart: null, breakEnd: null }, timeOff: [],
+          slots: [
+            { start: `${CLINIC.today}T09:30:00`, end: `${CLINIC.today}T09:45:00`, available: false, reason: "SLOT_TAKEN" },
+            { start: `${CLINIC.today}T15:00:00`, end: `${CLINIC.today}T15:15:00`, available: true, reason: null },
+          ],
+        },
+      }))
+      .route("POST /api/v1/appointments/booked/reschedule", ({ body }) => ({
+        body: { ...appointments[0], scheduledAt: (body as { scheduledAt: string }).scheduledAt },
+      }));
+    await open();
+
+    await userEvent.click(screen.getByRole("button", { name: "Reschedule: Booked Person" }));
+    const dialog = screen.getByRole("dialog", { name: "Reschedule Booked Person" });
+    await waitFor(() => expect(within(dialog).getByRole("combobox", { name: "New time" })).toHaveValue("15:00"));
+    await userEvent.click(within(dialog).getByRole("button", { name: "Move appointment" }));
+
+    await waitFor(() =>
+      expect(api.callsTo("POST", "/api/v1/appointments/booked/reschedule")[0]?.body).toEqual({
+        scheduledAt: `${CLINIC.today}T15:00:00`,
+      }),
+    );
+    expect(await screen.findByText(/Booked Person moved to 2026-03-10 at 15:00/)).toBeInTheDocument();
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("offers no reschedule for a walk-in", async () => {
+    appointments[0] = { ...appointments[0], walkIn: true };
+    await open();
+    expect(screen.getByRole("button", { name: "Confirm: Booked Person" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reschedule: Booked Person" })).not.toBeInTheDocument();
+  });
+
   it("confirms without a dialog (not destructive)", async () => {
     api.route("POST /api/v1/appointments/booked/confirm", () => ({ body: { ...appointments[0], status: "CONFIRMED" } }));
     await open();

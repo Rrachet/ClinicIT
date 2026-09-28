@@ -264,6 +264,11 @@ Spring Boot never shows an estimate it hasn't checked:
 A fallback caused by an outage is cached only until the service may be tried again, so estimates switch back to
 the model soon after it recovers.
 
+**Scheduled pauses (Phase 10).** Whichever produced it, an estimate assumes the doctor keeps working. For a doctor
+with a schedule, a break, leave or the start of the day that falls within the wait is added to it, each bound
+separately ([SCHEDULING.md](SCHEDULING.md)). This deterministic adjustment is applied after the model and the
+baseline, which are unchanged; the evaluation below does not include it.
+
 **Load:**
 - **Server:** estimates are cached per patient and reused while the doctor's queue is unchanged (its latest
   history event), for up to 60 s. So the whole reception team and every patient's status page together cost at
@@ -311,8 +316,8 @@ Other safeguards:
   examples is smaller than the row count.
 - **Under-coverage:** the interval under-covers slightly on the test days (76% against a nominal 80%), and the
   model underestimates by about 3 minutes on average.
-- **Blind spots:** a doctor's unannounced break, an emergency, or a patient who takes much longer than usual
-  cannot be foreseen from queue state.
+- **Blind spots:** an unannounced break, an emergency, or a patient who takes much longer than usual cannot be
+  foreseen from queue state. (Breaks and leave in a doctor's schedule are added to estimates since Phase 10.)
 - **Doctors without history** get the baseline until they have 20 consultations in the past 28 days.
 - **No drift monitoring or automatic retraining yet.** Retrain as history accumulates, and compare with the
   baseline each time. The report and tests make that comparison routine.

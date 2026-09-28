@@ -15,7 +15,8 @@ public record AppointmentResponse(
         UUID doctorId,
         LocalDateTime scheduledAt,
         AppointmentStatus status,
-        String reasonSummary
+        String reasonSummary,
+        boolean walkIn
 ) {
     public static AppointmentResponse from(Appointment appointment, String patientName) {
         return new AppointmentResponse(
@@ -26,7 +27,8 @@ public record AppointmentResponse(
                 appointment.getDoctorId(),
                 appointment.getScheduledAt(),
                 appointment.getStatus(),
-                appointment.getReasonSummary()
+                appointment.getReasonSummary(),
+                appointment.isWalkIn()
         );
     }
 }

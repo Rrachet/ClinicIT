@@ -24,4 +24,15 @@ public record WaitTimeEstimate(
             throw new IllegalArgumentException("Estimate must satisfy 0 <= lower <= estimate <= upper");
         }
     }
+
+    /**
+     * The same estimate with the doctor's pauses added (see DoctorSchedule#pauseMinutesAhead).
+     * Each bound gets the pause that lies within its own horizon, so the order is kept.
+     */
+    public WaitTimeEstimate withPauses(java.util.function.LongUnaryOperator pauseAhead) {
+        int lower = lowerBoundMinutes + (int) pauseAhead.applyAsLong(lowerBoundMinutes);
+        int estimate = Math.max(lower, estimatedWaitMinutes + (int) pauseAhead.applyAsLong(estimatedWaitMinutes));
+        int upper = Math.max(estimate, upperBoundMinutes + (int) pauseAhead.applyAsLong(upperBoundMinutes));
+        return new WaitTimeEstimate(estimate, lower, upper, source, modelVersion, reason);
+    }
 }

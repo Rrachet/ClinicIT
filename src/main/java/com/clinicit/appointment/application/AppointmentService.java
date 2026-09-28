@@ -7,18 +7,23 @@ import com.clinicit.appointment.domain.AppointmentConfirmed;
 import com.clinicit.appointment.domain.AppointmentRepository;
 import com.clinicit.appointment.domain.AppointmentStatus;
 import com.clinicit.clinic.application.ClinicTime;
+import com.clinicit.clinic.domain.DoctorProfile;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
 import com.clinicit.common.domain.BusinessRuleException;
+import com.clinicit.common.domain.InvalidRequestException;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.history.application.LifecycleHistory;
 import com.clinicit.identity.domain.Actor;
 import com.clinicit.patient.domain.Patient;
 import com.clinicit.patient.domain.PatientRepository;
+import com.clinicit.schedule.application.BookingRules;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -34,6 +39,7 @@ public class AppointmentService {
     private final ClinicTime clinicTime;
     private final ApplicationEventPublisher events;
     private final LifecycleHistory history;
+    private final BookingRules bookingRules;
 
     public AppointmentService(
             AppointmentRepository repository,
@@ -41,7 +47,8 @@ public class AppointmentService {
             DoctorProfileRepository doctors,
             ClinicTime clinicTime,
             ApplicationEventPublisher events,
-            LifecycleHistory history
+            LifecycleHistory history,
+            BookingRules bookingRules
     ) {
         this.repository = repository;
         this.patients = patients;
@@ -49,6 +56,7 @@ public class AppointmentService {
         this.clinicTime = clinicTime;
         this.events = events;
         this.history = history;
+        this.bookingRules = bookingRules;
     }
 
     public AppointmentResponse create(Actor actor, CreateAppointmentRequest request) {
@@ -56,14 +64,32 @@ public class AppointmentService {
         // too, otherwise one clinic could book (and later queue) another clinic's patients.
         Patient patient = patients.findByIdAndClinicId(request.patientId(), actor.clinicId())
                 .orElseThrow(() -> new NotFoundException("Patient not found"));
-        doctors.findByIdAndClinicId(request.doctorId(), actor.clinicId())
-                .orElseThrow(() -> new NotFoundException("Doctor not found"));
+        LocalDateTime scheduledAt;
+        if (request.isWalkIn()) {
+            // At the desk now: booked for the current minute, queued in arrival order, never
+            // holding a slot. Only refused when the doctor is not working again today.
+            DoctorProfile doctor = doctors.findByIdAndClinicId(request.doctorId(), actor.clinicId())
+                    .orElseThrow(() -> new NotFoundException("Doctor not found"));
+            scheduledAt = clinicTime.now(actor.clinicId()).truncatedTo(ChronoUnit.MINUTES);
+            bookingRules.requireWalkIn(doctor, scheduledAt);
+        } else {
+            if (request.scheduledAt() == null) {
+                throw new InvalidRequestException("scheduledAt: must not be null");
+            }
+            // The doctor row lock serialises bookings per doctor, so two receptionists cannot
+            // both take the last free slot. Doctor first: the queue's lock order (QUEUE_ENGINE.md).
+            DoctorProfile doctor = doctors.findByIdAndClinicIdForUpdate(request.doctorId(), actor.clinicId())
+                    .orElseThrow(() -> new NotFoundException("Doctor not found"));
+            scheduledAt = request.scheduledAt().truncatedTo(ChronoUnit.MINUTES);
+            bookingRules.requireSlot(doctor, scheduledAt, null);
+        }
 
         Appointment appointment = new Appointment();
         appointment.setClinicId(actor.clinicId());
         appointment.setPatientId(request.patientId());
         appointment.setDoctorId(request.doctorId());
-        appointment.setScheduledAt(request.scheduledAt());
+        appointment.setScheduledAt(scheduledAt);
+        appointment.setWalkIn(request.isWalkIn());
         appointment.setReasonSummary(request.reasonSummary());
 
         Appointment saved = repository.save(appointment);
@@ -97,6 +123,33 @@ public class AppointmentService {
         return found.stream()
                 .map(appointment -> AppointmentResponse.from(appointment, names.get(appointment.getPatientId())))
                 .toList();
+    }
+
+    /**
+     * Moves a booked or confirmed appointment to another time with the same doctor, under the
+     * same scheduling rules as a new booking. Walk-ins and arrived patients are not moved.
+     */
+    public AppointmentResponse reschedule(Actor actor, UUID id, LocalDateTime newTime) {
+        UUID doctorId = repository.findByIdAndClinicId(id, actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("Appointment not found"))
+                .getDoctorId();
+        // Doctor, then appointment: the lock order used everywhere else.
+        DoctorProfile doctor = doctors.findByIdAndClinicIdForUpdate(doctorId, actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("Doctor not found"));
+        Appointment appointment = repository.findByIdAndClinicIdForUpdate(id, actor.clinicId())
+                .orElseThrow(() -> new NotFoundException("Appointment not found"));
+
+        if (appointment.getStatus() != AppointmentStatus.BOOKED && appointment.getStatus() != AppointmentStatus.CONFIRMED) {
+            throw new BusinessRuleException("NOT_RESCHEDULABLE", "Only booked or confirmed appointments can be rescheduled");
+        }
+        if (appointment.isWalkIn()) {
+            throw new BusinessRuleException("NOT_RESCHEDULABLE", "A walk-in has no slot to move");
+        }
+        LocalDateTime scheduledAt = newTime.truncatedTo(ChronoUnit.MINUTES);
+        bookingRules.requireSlot(doctor, scheduledAt, appointment.getId());
+        appointment.setScheduledAt(scheduledAt);
+        history.rescheduled(appointment, actor, clinicTime.instant());
+        return respond(appointment);
     }
 
     public AppointmentResponse confirm(Actor actor, UUID id) {

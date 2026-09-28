@@ -91,7 +91,8 @@ public class SecurityConfig implements WebMvcConfigurer {
         }
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOrigins(cors.allowedOrigins());
-        config.setAllowedMethods(List.of("GET", "POST", "OPTIONS"));
+        // PUT and DELETE since Phase 10 (doctor schedules and time off).
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         config.setExposedHeaders(List.of("WWW-Authenticate"));
         config.setAllowCredentials(false);

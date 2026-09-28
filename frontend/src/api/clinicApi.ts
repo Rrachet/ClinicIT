@@ -1,10 +1,12 @@
 import type { ApiClient } from "./client";
 import type {
   Appointment,
+  Availability,
   Clinic,
   DailySummary,
   Doctor,
   DoctorAnalytics,
+  DoctorSchedule,
   LoginResponse,
   Patient,
   PatientNotification,
@@ -12,9 +14,11 @@ import type {
   QueueAnalytics,
   QueueBoard,
   QueueEntry,
+  TimeOff,
   User,
   WaitEstimates,
   WaitTimes,
+  WorkingDay,
 } from "./types";
 
 /** Typed wrappers around every backend endpoint the UI uses. No logic beyond HTTP. */
@@ -28,6 +32,15 @@ export function clinicApi(http: ApiClient) {
 
     clinic: () => http.get<Clinic>("/api/v1/clinic"),
     doctors: () => http.get<Doctor[]>("/api/v1/doctors"),
+    schedule: (doctorId: string) => http.get<DoctorSchedule>(`/api/v1/doctors/${id(doctorId)}/schedule`),
+    updateSchedule: (doctorId: string, body: { appointmentMinutes: number; weeklyHours: WorkingDay[] }) =>
+      http.put<DoctorSchedule>(`/api/v1/doctors/${id(doctorId)}/schedule`, { body }),
+    addTimeOff: (doctorId: string, body: { startsAt: string; endsAt: string; reason?: string }) =>
+      http.post<{ timeOff: TimeOff; bookedAppointments: number }>(`/api/v1/doctors/${id(doctorId)}/time-off`, { body }),
+    removeTimeOff: (doctorId: string, timeOffId: string) =>
+      http.delete<void>(`/api/v1/doctors/${id(doctorId)}/time-off/${id(timeOffId)}`),
+    availability: (doctorId: string, date: string) =>
+      http.get<Availability>(`/api/v1/doctors/${id(doctorId)}/availability`, { query: { date } }),
 
     searchPatients: (name: string) => http.get<Patient[]>("/api/v1/patients", { query: { name } }),
     registerPatient: (patient: { fullName: string; phone: string; dateOfBirth?: string | null }) =>
@@ -36,8 +49,16 @@ export function clinicApi(http: ApiClient) {
     appointments: (date: string, doctorId?: string) =>
       http.get<Appointment[]>("/api/v1/appointments", { query: { date, doctorId } }),
     appointment: (appointmentId: string) => http.get<Appointment>(`/api/v1/appointments/${id(appointmentId)}`),
-    createAppointment: (body: { patientId: string; doctorId: string; scheduledAt: string; reasonSummary?: string }) =>
-      http.post<Appointment>("/api/v1/appointments", { body }),
+    /** Either a clinic-local scheduledAt, or walkIn (booked for now, no slot). */
+    createAppointment: (body: {
+      patientId: string;
+      doctorId: string;
+      scheduledAt?: string;
+      walkIn?: boolean;
+      reasonSummary?: string;
+    }) => http.post<Appointment>("/api/v1/appointments", { body }),
+    rescheduleAppointment: (appointmentId: string, scheduledAt: string) =>
+      http.post<Appointment>(`/api/v1/appointments/${id(appointmentId)}/reschedule`, { body: { scheduledAt } }),
     confirmAppointment: (appointmentId: string) =>
       http.post<Appointment>(`/api/v1/appointments/${id(appointmentId)}/confirm`),
     arrive: (appointmentId: string) => http.post<Appointment>(`/api/v1/appointments/${id(appointmentId)}/arrive`),

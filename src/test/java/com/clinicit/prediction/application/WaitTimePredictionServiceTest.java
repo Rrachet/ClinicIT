@@ -21,7 +21,7 @@ class WaitTimePredictionServiceTest {
         };
         var service = new WaitTimePredictionService(null, null, null, null, failIfCalled,
                 new PredictionProperties(null, null, null, null, null), null,
-                new PredictionMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
+                new PredictionMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()), null);
 
         List<WaitTimeEstimate> estimates = service.predict(List.of(TWO_AHEAD), Instant.now());
 

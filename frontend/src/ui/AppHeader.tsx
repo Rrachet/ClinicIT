@@ -18,6 +18,7 @@ const FEED_TEXT: Record<FeedStatus, string> = {
 const ADMIN_LINKS = [
   { href: "/reception", label: "Reception" },
   { href: "/admin", label: "Analytics" },
+  { href: "/admin/schedules", label: "Schedules" },
 ];
 
 export function AppHeader({ title, clinicName, day, feed }: { title: string; clinicName?: string; day?: string; feed?: FeedStatus }) {

@@ -36,6 +36,7 @@ logic and no database access.
 - notification: patient messages. Listens to appointment/queue domain events, records messages in the causing transaction, delivers after commit through a `NotificationProvider` port (see [NOTIFICATIONS.md](NOTIFICATIONS.md)); core services never depend on it
 - history: the immutable operational history (`operational_events`). The appointment and queue services append one event per transition inside the transition's transaction; nothing updates or deletes it (enforced by a database trigger)
 - analytics: read-only operational metrics computed in PostgreSQL from that history, clinic-scoped and in clinic-local time (see [ANALYTICS.md](ANALYTICS.md))
+- schedule: doctors' weekly hours, breaks, appointment length and time off (Phase 10), the booking rules the appointment module applies, and availability. Clinic-local wall-clock times throughout (see [SCHEDULING.md](SCHEDULING.md))
 - prediction: estimated waits (Phase 8). Builds features "as of now" from the operational history, calls the Python ML service (`ml/`, FastAPI) through the `WaitTimeModelClient` port with a short timeout, and falls back to a deterministic baseline. Read-only; the queue and appointment modules never call it (see [AI.md](AI.md))
 - common: error handling (one `ApiError` shape), shared exceptions, clock and scheduling configuration
 - health: the public liveness endpoint

@@ -13,6 +13,8 @@ import com.clinicit.prediction.domain.WaitTimeFeatures;
 import com.clinicit.queue.domain.QueueEntry;
 import com.clinicit.queue.domain.QueueEntryRepository;
 import com.clinicit.queue.domain.QueueStatus;
+import com.clinicit.schedule.application.DoctorScheduleService;
+import com.clinicit.schedule.domain.DoctorSchedule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -21,6 +23,7 @@ import org.springframework.stereotype.Service;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -60,6 +63,7 @@ public class WaitTimePredictionService {
     private final PredictionProperties properties;
     private final JdbcTemplate jdbc;
     private final PredictionMetrics metrics;
+    private final DoctorScheduleService schedules;
 
     private final Map<UUID, Cached> cache = new ConcurrentHashMap<>();
     private volatile Instant modelRetryAfter = Instant.MIN;
@@ -74,7 +78,8 @@ public class WaitTimePredictionService {
             WaitTimeModelClient model,
             PredictionProperties properties,
             JdbcTemplate jdbc,
-            PredictionMetrics metrics
+            PredictionMetrics metrics,
+            DoctorScheduleService schedules
     ) {
         this.entries = entries;
         this.doctors = doctors;
@@ -84,6 +89,7 @@ public class WaitTimePredictionService {
         this.properties = properties;
         this.jdbc = jdbc;
         this.metrics = metrics;
+        this.schedules = schedules;
     }
 
     /** Estimates for everyone waiting for one doctor today. Doctors may only ask about themselves. */
@@ -138,7 +144,7 @@ public class WaitTimePredictionService {
                 .map(entry -> featureBuilder.at(clinicId, doctorId, entry.getId(), entry.getTokenNumber(),
                         now, Long.MAX_VALUE, zone))
                 .toList();
-        List<WaitTimeEstimate> estimates = predict(rows, now);
+        List<WaitTimeEstimate> estimates = withSchedulePauses(clinicId, doctorId, predict(rows, now), now, zone);
 
         if (cache.size() > MAX_CACHED) cache.clear();
         for (int i = 0; i < missing.size(); i++) {
@@ -147,6 +153,22 @@ public class WaitTimePredictionService {
             cache.put(id, new Cached(queueVersion, expiry(estimates.get(i), now), estimates.get(i)));
         }
         return result;
+    }
+
+    /**
+     * The model and the baseline assume the doctor keeps working. When the doctor has a
+     * schedule, a break or time off that falls within a patient's wait is added to it (the
+     * patient really does wait longer). Deterministic and documented in docs/SCHEDULING.md.
+     */
+    private List<WaitTimeEstimate> withSchedulePauses(
+            UUID clinicId, UUID doctorId, List<WaitTimeEstimate> estimates, Instant now, ZoneId zone
+    ) {
+        DoctorSchedule schedule = doctors.findByIdAndClinicId(doctorId, clinicId).map(schedules::forBooking).orElse(null);
+        if (schedule == null || !schedule.isConfigured()) return estimates;
+        LocalDateTime localNow = LocalDateTime.ofInstant(now, zone);
+        return estimates.stream()
+                .map(estimate -> estimate.withPauses(minutes -> schedule.pauseMinutesAhead(localNow, minutes)))
+                .toList();
     }
 
     /** Forgets cached estimates and any failure backoff, e.g. after deploying a new model. */

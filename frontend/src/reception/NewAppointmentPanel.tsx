@@ -6,6 +6,7 @@ import type { Clinic, Doctor, Patient } from "@/api/types";
 import { Button } from "@/ui/Button";
 import { ErrorBanner } from "@/ui/Feedback";
 import { clinicNow } from "@/ui/format";
+import { SlotPicker, effectiveTime, useAvailability } from "./SlotPicker";
 import { book, type BookingResult } from "./workflows";
 
 /**
@@ -32,11 +33,16 @@ export function NewAppointmentPanel({
   const [newPhone, setNewPhone] = useState("");
   const [chosenDoctorId, setDoctorId] = useState("");
   const doctorId = chosenDoctorId || doctors[0]?.id || "";
+  const [date, setDate] = useState(clinic.today);
   const [time, setTime] = useState(() => clinicNow(clinic.timezone).slice(11, 16));
   const [reason, setReason] = useState("");
   const [checkInNow, setCheckInNow] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  // A walk-in is booked for "now" by the server, so slots only matter for a later booking.
+  const availability = useAvailability(api, doctorId, date, !checkInNow);
+  const bookedTime = effectiveTime(availability, time);
+  const nothingFree = !checkInNow && availability !== undefined && bookedTime === "";
 
   // Debounced name search; the backend returns at most 20 matches, from this clinic only.
   const term = query.trim();
@@ -66,6 +72,7 @@ export function NewAppointmentPanel({
     setRegistering(false);
     setNewName("");
     setNewPhone("");
+    setDate(clinic.today);
     setTime(clinicNow(clinic.timezone).slice(11, 16));
   };
 
@@ -92,7 +99,7 @@ export function NewAppointmentPanel({
       const result = await book(api, {
         patientId: patient.id,
         doctorId,
-        scheduledAt: `${clinic.today}T${time}`,
+        scheduledAt: checkInNow ? undefined : `${date}T${bookedTime}`,
         reasonSummary: reason,
         checkInNow,
       });
@@ -190,19 +197,32 @@ export function NewAppointmentPanel({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span>Time today</span>
-          <input type="time" value={time} onChange={(e) => setTime(e.target.value)} required />
-        </label>
-        <label className="field">
-          <span>Reason (optional)</span>
-          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
-        </label>
         <label className="check">
           <input type="checkbox" checked={checkInNow} onChange={(e) => setCheckInNow(e.target.checked)} />
           Patient is here now — check in and add to queue
         </label>
-        <Button type="submit" variant="primary" size="lg" busy={busy} disabled={!patient || !doctorId}>
+        {checkInNow ? (
+          <p className="hint">Walk-in: booked for now and added to the queue in arrival order.</p>
+        ) : (
+          <>
+            <label className="field">
+              <span>Date</span>
+              <input type="date" value={date} min={clinic.today} onChange={(e) => setDate(e.target.value)} required />
+            </label>
+            <SlotPicker availability={availability} value={bookedTime} onChange={setTime} />
+          </>
+        )}
+        <label className="field">
+          <span>Reason (optional)</span>
+          <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={500} />
+        </label>
+        <Button
+          type="submit"
+          variant="primary"
+          size="lg"
+          busy={busy}
+          disabled={!patient || !doctorId || (!checkInNow && (availability === undefined || nothingFree))}
+        >
           {checkInNow ? "Book and add to queue" : "Book appointment"}
         </Button>
       </form>
