@@ -72,4 +72,15 @@ public class AnalyticsController {
     ) {
         return service.noShows(actor, from, to, doctorId);
     }
+
+    /** Day-by-day figures and doctor workload over a range (default: the last 14 days). */
+    @GetMapping("/trends")
+    public TrendsResponse trends(
+            Actor actor,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(required = false) UUID doctorId
+    ) {
+        return service.trends(actor, from, to, doctorId);
+    }
 }

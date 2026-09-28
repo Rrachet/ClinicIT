@@ -4,13 +4,14 @@ import com.clinicit.analytics.api.DailySummaryResponse;
 import com.clinicit.analytics.api.DoctorAnalyticsResponse;
 import com.clinicit.analytics.api.NoShowResponse;
 import com.clinicit.analytics.api.QueueAnalyticsResponse;
+import com.clinicit.analytics.api.TrendsResponse;
 import com.clinicit.analytics.api.WaitTimesResponse;
 import com.clinicit.clinic.application.ClinicTime;
 import com.clinicit.clinic.domain.DoctorProfileRepository;
-import com.clinicit.schedule.application.DoctorScheduleService;
 import com.clinicit.common.domain.InvalidRequestException;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.identity.domain.Actor;
+import com.clinicit.schedule.application.DoctorScheduleService;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowCallbackHandler;
 import org.springframework.stereotype.Service;
@@ -284,6 +285,107 @@ public class AnalyticsService {
                 total.cancellationRate(), total.noShowRate(),
                 total.neverArrived(), total.leftBeforeQueue(), total.leftQueue(),
                 byDay);
+    }
+
+    static final int DEFAULT_TREND_DAYS = 14;
+    static final int MAX_TREND_DAYS = 92;
+
+    /**
+     * Daily volume, completion, no-shows, waits and consultation times over a range (default:
+     * the last 14 days including today), plus each doctor's workload. A doctor sees only
+     * their own figures.
+     */
+    public TrendsResponse trends(Actor actor, LocalDate requestedFrom, LocalDate requestedTo, UUID requestedDoctorId) {
+        UUID doctorId = scopeDoctor(actor, requestedDoctorId);
+        ZoneId zone = clinicTime.zone(actor.clinicId());
+        LocalDate to = requestedTo != null ? requestedTo : clinicTime.today(actor.clinicId());
+        LocalDate from = requestedFrom != null ? requestedFrom : to.minusDays(DEFAULT_TREND_DAYS - 1);
+        if (from.isAfter(to)) {
+            throw new InvalidRequestException("from must not be after to");
+        }
+        if (ChronoUnit.DAYS.between(from, to) + 1 > MAX_TREND_DAYS) {
+            throw new InvalidRequestException("The range can be at most " + MAX_TREND_DAYS + " days");
+        }
+
+        String doctorFilter = doctorId == null ? "" : "and doctor_id = ?";
+        List<Object> window = new ArrayList<>(List.of(actor.clinicId(),
+                from.atStartOfDay(zone).toOffsetDateTime(), to.plusDays(1).atStartOfDay(zone).toOffsetDateTime()));
+        if (doctorId != null) window.add(doctorId);
+
+        // Attendance by the day the appointment was scheduled for (as the no-show endpoint).
+        List<Object> attendanceParams = new ArrayList<>(List.of(actor.clinicId(), from.atStartOfDay(), to.plusDays(1).atStartOfDay()));
+        if (doctorId != null) attendanceParams.add(doctorId);
+        Map<LocalDate, long[]> attendance = new HashMap<>();
+        jdbc.query(ATTENDANCE.formatted(doctorId == null ? "" : "and a.doctor_id = ?") + """
+                select scheduled_at::date as day, count(*) as scheduled,
+                       count(*) filter (where cancelled) as cancelled,
+                       count(*) filter (where no_show_from is not null) as no_shows
+                from attendance
+                group by 1
+                """, rs -> {
+                    attendance.put(rs.getObject("day", LocalDate.class),
+                            new long[]{rs.getLong("scheduled"), rs.getLong("cancelled"), rs.getLong("no_shows")});
+                }, attendanceParams.toArray());
+
+        // Visits by the clinic-local day the patient joined the queue.
+        List<Object> visitParams = new ArrayList<>(window);
+        visitParams.add(zone.getId());
+        Map<LocalDate, Object[]> visits = new HashMap<>();
+        jdbc.query(VISITS.formatted(doctorFilter) + """
+                select (joined_at at time zone ?)::date                               as day,
+                       count(*)                                                       as checked_in,
+                       count(completed_at)                                            as completed,
+                       percentile_cont(0.5) within group (order by wait_seconds)      as median_wait,
+                       avg(consultation_seconds)                                      as avg_consultation
+                from timed
+                group by 1
+                """, rs -> {
+                    visits.put(rs.getObject("day", LocalDate.class), new Object[]{
+                            rs.getLong("checked_in"), rs.getLong("completed"),
+                            seconds(rs.getObject("median_wait")), seconds(rs.getObject("avg_consultation"))});
+                }, visitParams.toArray());
+
+        List<TrendsResponse.Day> days = new ArrayList<>();
+        for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
+            long[] a = attendance.getOrDefault(day, new long[3]);
+            Object[] v = visits.getOrDefault(day, new Object[]{0L, 0L, null, null});
+            long expected = a[0] - a[1];
+            long completed = (long) v[1];
+            days.add(new TrendsResponse.Day(day, a[0], a[1], a[2], (long) v[0], completed,
+                    expected == 0 ? null : Math.min(1.0, (double) completed / expected),
+                    expected == 0 ? null : (double) a[2] / expected,
+                    (Double) v[2], (Double) v[3]));
+        }
+
+        List<Object> loadParams = new ArrayList<>(window);
+        loadParams.add(zone.getId());
+        loadParams.add(actor.clinicId());
+        if (doctorId != null) loadParams.add(doctorId);
+        List<TrendsResponse.DoctorLoad> doctorLoads = jdbc.query(VISITS.formatted(doctorFilter) + """
+                , per_doctor as (
+                    select doctor_id,
+                           count(completed_at)                                               as completed,
+                           sum(consultation_seconds)                                         as consultation_total,
+                           count(distinct (called_at at time zone ?)::date)                  as days_worked
+                    from timed
+                    group by doctor_id
+                )
+                select d.id, d.display_name, coalesce(p.completed, 0) as completed, p.consultation_total,
+                       coalesce(p.days_worked, 0) as days_worked
+                from doctor_profiles d
+                left join per_doctor p on p.doctor_id = d.id
+                where d.clinic_id = ? %s
+                order by d.display_name, d.id
+                """.formatted(doctorId == null ? "" : "and d.id = ?"), (rs, i) -> {
+                    long completed = rs.getLong("completed");
+                    long daysWorked = rs.getLong("days_worked");
+                    return new TrendsResponse.DoctorLoad(
+                            rs.getObject("id", UUID.class), rs.getString("display_name"), completed,
+                            seconds(rs.getObject("consultation_total")), daysWorked,
+                            daysWorked == 0 ? null : (double) completed / daysWorked);
+                }, loadParams.toArray());
+
+        return new TrendsResponse(from, to, doctorId, days, doctorLoads);
     }
 
     /**

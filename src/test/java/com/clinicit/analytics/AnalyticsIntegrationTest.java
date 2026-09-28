@@ -4,6 +4,7 @@ import com.clinicit.analytics.api.DailySummaryResponse;
 import com.clinicit.analytics.api.DoctorAnalyticsResponse;
 import com.clinicit.analytics.api.NoShowResponse;
 import com.clinicit.analytics.api.QueueAnalyticsResponse;
+import com.clinicit.analytics.api.TrendsResponse;
 import com.clinicit.analytics.api.WaitTimesResponse;
 import com.clinicit.analytics.application.AnalyticsService;
 import com.clinicit.appointment.api.CreateAppointmentRequest;
@@ -472,5 +473,100 @@ class AnalyticsIntegrationTest extends PostgresIntegrationTest {
             mvc.perform(get("/api/v1/analytics/today").param("date", "yesterday").with(bearer(admin)))
                     .andExpect(status().isBadRequest());
         }
+    }
+
+    /** One visit: checked in at hh:mm, called after waitMinutes, seen for consultMinutes. */
+    private void visit(DoctorProfile doctor, LocalDate date, int hour, int minute, int waitMinutes, int consultMinutes) {
+        at(date, hour, minute);
+        QueueEntryResponse entry = checkIn(doctor, date, hour, minute);
+        at(date, hour, minute + waitMinutes);
+        queue.callNext(desk, doctor.getId());
+        queue.startConsultation(desk, entry.id());
+        at(date, hour, minute + waitMinutes + consultMinutes);
+        queue.complete(desk, entry.id());
+    }
+
+    @Test
+    void trendsGiveEveryDayOfTheRangeWithTheSameDefinitionsAsTheDailyFigures() throws Exception {
+        LocalDate twoDaysAgo = TODAY.minusDays(2);
+        LocalDate yesterday = TODAY.minusDays(1);
+
+        // Two days ago: Dr. A sees two patients (waits 10 and 20 min, 6 min each); one confirmed patient never comes.
+        visit(drA, twoDaysAgo, 9, 0, 10, 6);
+        visit(drA, twoDaysAgo, 10, 0, 20, 6);
+        at(twoDaysAgo, 9, 0);
+        UUID absent = book(drA, twoDaysAgo, 11, 0);
+        appointmentService.confirm(desk, absent);
+        at(twoDaysAgo, 12, 0);
+        appointmentService.markNoShow(desk, absent);
+
+        // Yesterday: Dr. B sees one patient (wait 5, consultation 12); another booking is cancelled.
+        visit(drB, yesterday, 9, 0, 5, 12);
+        at(yesterday, 8, 0);
+        appointmentService.cancel(desk, book(drB, yesterday, 15, 0));
+
+        at(12, 0);
+        var trends = analytics.trends(desk, TODAY.minusDays(3), TODAY, null);
+
+        assertThat(trends.days()).extracting(TrendsResponse.Day::date)
+                .containsExactly(TODAY.minusDays(3), twoDaysAgo, yesterday, TODAY);
+        assertThat(trends.days().get(0)).isEqualTo(new TrendsResponse.Day(TODAY.minusDays(3), 0, 0, 0, 0, 0, null, null, null, null));
+
+        TrendsResponse.Day first = trends.days().get(1);
+        assertThat(first.scheduled()).isEqualTo(3);
+        assertThat(first.noShows()).isEqualTo(1);
+        assertThat(first.completed()).isEqualTo(2);
+        assertThat(first.completionRate()).isCloseTo(2 / 3.0, within(1e-9));
+        assertThat(first.noShowRate()).isCloseTo(1 / 3.0, within(1e-9));
+        assertThat(first.medianWaitSeconds()).isEqualTo(15 * 60.0);
+        assertThat(first.averageConsultationSeconds()).isEqualTo(6 * 60.0);
+
+        TrendsResponse.Day second = trends.days().get(2);
+        assertThat(second.scheduled()).isEqualTo(2);
+        assertThat(second.cancelled()).isEqualTo(1);
+        assertThat(second.completionRate()).isEqualTo(1.0);   // 1 completed of 1 still expected
+        assertThat(second.noShowRate()).isEqualTo(0.0);
+
+        // The same day through the one-day endpoint agrees.
+        assertThat(analytics.summary(desk, twoDaysAgo, null).noShowRate()).isEqualTo(first.noShowRate());
+
+        assertThat(trends.doctors()).extracting(TrendsResponse.DoctorLoad::doctorName, TrendsResponse.DoctorLoad::completed,
+                        TrendsResponse.DoctorLoad::daysWorked, TrendsResponse.DoctorLoad::completedPerDayWorked)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple("Dr. A", 2L, 1L, 2.0),
+                        org.assertj.core.groups.Tuple.tuple("Dr. B", 1L, 1L, 1.0));
+        assertThat(trends.doctors().get(0).consultationSeconds()).isEqualTo(12 * 60.0);
+    }
+
+    @Test
+    void trendsDefaultToTwoWeeksAreBoundedAndDoctorsSeeOnlyThemselves() throws Exception {
+        visit(drA, TODAY.minusDays(1), 9, 0, 5, 5);
+        visit(drB, TODAY.minusDays(1), 9, 0, 5, 5);
+        at(12, 0);
+
+        var defaults = analytics.trends(desk, null, null, null);
+        assertThat(defaults.from()).isEqualTo(TODAY.minusDays(13));
+        assertThat(defaults.to()).isEqualTo(TODAY);
+        assertThat(defaults.days()).hasSize(14);
+
+        assertThatThrownBy(() -> analytics.trends(desk, TODAY, TODAY.minusDays(1), null))
+                .isInstanceOf(com.clinicit.common.domain.InvalidRequestException.class);
+        assertThatThrownBy(() -> analytics.trends(desk, TODAY.minusDays(92), TODAY, null))
+                .isInstanceOf(com.clinicit.common.domain.InvalidRequestException.class);
+
+        assertThatThrownBy(() -> analytics.trends(doctorActor(drA), null, null, drB.getId()))
+                .isInstanceOf(com.clinicit.common.domain.ForbiddenException.class);
+        var own = analytics.trends(doctorActor(drA), null, null, null);
+        assertThat(own.doctorId()).isEqualTo(drA.getId());
+        assertThat(own.doctors()).extracting(TrendsResponse.DoctorLoad::doctorId).containsExactly(drA.getId());
+        assertThat(own.days().get(12).completed()).isEqualTo(1);
+
+        String doctorToken = login(staff(clinic, com.clinicit.identity.domain.Role.DOCTOR, drA, "a@city.test"));
+        mvc.perform(get("/api/v1/analytics/trends").param("doctorId", drB.getId().toString()).with(bearer(doctorToken)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/analytics/trends").with(bearer(doctorToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.days.length()").value(14))
+                .andExpect(jsonPath("$.doctors.length()").value(1));
     }
 }
