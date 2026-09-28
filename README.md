@@ -69,6 +69,20 @@ skipped.
 
 ## Running the full stack locally
 
+### With Docker (quickest)
+
+```bash
+docker compose up --build
+```
+
+Then open http://localhost:3000 and sign in as the local demo admin `admin@demo.clinicit.local` /
+`local-demo-only-2026` (change both in a `.env` file: `CLINICIT_BOOTSTRAP_ADMIN_EMAIL`,
+`CLINICIT_BOOTSTRAP_ADMIN_PASSWORD`). This starts PostgreSQL, the API, the wait-time ML service and the web app, all
+bound to 127.0.0.1. It is for evaluation only; production is described in [docs/OPERATIONS.md](docs/OPERATIONS.md).
+`docker compose down -v` removes everything, including the database.
+
+### Without Docker
+
 Requirements: Java 21, Maven, Node 20.9+, PostgreSQL, and Python 3.11+ for the optional ML service.
 
 **1. API** (http://localhost:8080). PostgreSQL at `localhost:5432/clinicit` by default; override with `DB_URL`,

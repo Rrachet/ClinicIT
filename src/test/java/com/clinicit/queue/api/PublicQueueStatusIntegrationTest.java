@@ -35,6 +35,7 @@ class PublicQueueStatusIntegrationTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired QueueService queue;
     @Autowired ObjectMapper json;
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
 
     Clinic clinic;
     DoctorProfile sharma;
@@ -141,5 +142,45 @@ class PublicQueueStatusIntegrationTest extends PostgresIntegrationTest {
         mvc.perform(get("/api/v1/queue-entries/{id}", mine.id()).header("Authorization", "Bearer " + mine.statusCode()))
                 .andExpect(status().isUnauthorized());
         mvc.perform(post("/api/v1/queue-entries/{id}/skip", mine.id())).andExpect(status().isUnauthorized());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions statusFrom(String ip, String code) throws Exception {
+        return mvc.perform(get("/api/v1/public/queue-status/{code}", code).with(request -> {
+            request.setRemoteAddr(ip);
+            return request;
+        }));
+    }
+
+    @Test
+    void guessingCodesGetsTheAddressRateLimitedWithoutAffectingOthers() throws Exception {
+        QueueEntryResponse mine = join(patient(clinic, "Me"));
+
+        for (int i = 0; i < 20; i++) {
+            statusFrom("203.0.113.7", "AAAAAAAAAAAAAAAAAAAA%02d".formatted(i)).andExpect(status().isNotFound());
+        }
+        // The guesser is now refused, even for a real code, without the database being asked.
+        statusFrom("203.0.113.7", mine.statusCode())
+                .andExpect(status().isTooManyRequests())
+                .andExpect(header().exists("Retry-After"))
+                .andExpect(jsonPath("$.code").value("RATE_LIMITED"))
+                .andExpect(jsonPath("$.path").value("/api/v1/public/queue-status"));
+        // Another patient on another address is unaffected.
+        statusFrom("198.51.100.20", mine.statusCode()).andExpect(status().isOk());
+
+        // The limit lifts when the window ends.
+        clock.set(NOW.plus(Duration.ofMinutes(1)));
+        statusFrom("203.0.113.7", mine.statusCode()).andExpect(status().isOk());
+    }
+
+    @Test
+    void aFloodOfValidRequestsIsLimitedButNormalPollingIsNot() throws Exception {
+        QueueEntryResponse mine = join(patient(clinic, "Me"));
+
+        // A busy waiting room behind one address: 300 page refreshes a minute are served.
+        for (int i = 0; i < 300; i++) {
+            statusFrom("192.0.2.1", mine.statusCode()).andExpect(status().isOk());
+        }
+        statusFrom("192.0.2.1", mine.statusCode()).andExpect(status().isTooManyRequests());
+        assertThat(meters.counter("clinicit.public_status.rejected").count()).isGreaterThanOrEqualTo(1);
     }
 }

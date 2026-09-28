@@ -9,6 +9,7 @@ import com.clinicit.support.PostgresIntegrationTest;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.clinicit.appointment.api.CreateAppointmentRequest;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.web.server.LocalManagementPort;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +34,7 @@ class ObservabilityIntegrationTest extends PostgresIntegrationTest {
     @Autowired MockMvc mvc;
     @Autowired MeterRegistry meters;
     @Autowired QueueService queue;
+    @Autowired com.clinicit.appointment.application.AppointmentService appointmentService;
     @Autowired TransactionTemplate tx;
 
     private final HttpClient http = HttpClient.newHttpClient();
@@ -117,6 +119,35 @@ class ObservabilityIntegrationTest extends PostgresIntegrationTest {
         assertThat(meters.find("clinicit.consultation.duration").timer().max(java.util.concurrent.TimeUnit.MINUTES))
                 .isGreaterThanOrEqualTo(9.0);
         assertThat(count("clinicit.queue.transitions", "to", "COMPLETED")).isPositive();
+    }
+
+    @Test
+    void appointmentCreationCompletionAndLossesAreCountedAfterCommit() {
+        double booked = count("clinicit.appointments", "status", "BOOKED");
+        double completed = count("clinicit.appointments", "status", "COMPLETED");
+        double cancelled = count("clinicit.appointments", "status", "CANCELLED");
+        java.time.LocalDateTime at = java.time.LocalDateTime.of(TODAY, java.time.LocalTime.of(17, 0));
+
+        var seen = appointmentService.create(desk, new CreateAppointmentRequest(
+                patient(clinic, "A").getId(), doctor.getId(), at, null));
+        var dropped = appointmentService.create(desk, new CreateAppointmentRequest(
+                patient(clinic, "B").getId(), doctor.getId(), at, null));
+        tx.executeWithoutResult(status -> {
+            appointmentService.create(desk, new CreateAppointmentRequest(
+                    patient(clinic, "C").getId(), doctor.getId(), at, null));
+            status.setRollbackOnly();
+        });
+        appointmentService.cancel(desk, dropped.id());
+        appointmentService.confirm(desk, seen.id());
+        appointmentService.arrive(desk, seen.id());
+        QueueEntryResponse entry = queue.join(desk, seen.id());
+        queue.callNext(desk, doctor.getId());
+        queue.startConsultation(desk, entry.id());
+        queue.complete(desk, entry.id());
+
+        assertThat(count("clinicit.appointments", "status", "BOOKED")).isEqualTo(booked + 2); // not the rollback
+        assertThat(count("clinicit.appointments", "status", "CANCELLED")).isEqualTo(cancelled + 1);
+        assertThat(count("clinicit.appointments", "status", "COMPLETED")).isEqualTo(completed + 1);
     }
 
     @Test

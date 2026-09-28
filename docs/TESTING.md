@@ -49,6 +49,7 @@ use of the server's timezone fails a test.
 | `ml` | `pytest` | includes retraining on the committed dataset and checking it reproduces the committed report |
 | `frontend` | `npm ci`, tests, typecheck, lint, production build | |
 | `e2e` | `scripts/e2e.sh` with its own PostgreSQL service | runs after the three above pass |
+| `compose` | `scripts/ci/compose-smoke.sh`: builds all images, `docker compose up`, checks readiness, admin login, API→ML, the web app's CSP, and that the management port is not published | runs after the three above pass |
 
 The first three run in parallel. Maven, pip and npm caches are keyed on `pom.xml`, `ml/requirements*.txt` and
 `frontend/package-lock.json`. A newer push cancels the running build of the same branch. On failure, the Surefire
@@ -74,8 +75,8 @@ timeout, back-off and cache, the history's `asOf` filter.
 
 ## What cannot be tested here
 
-- **GitHub Actions itself** only runs on GitHub. The workflow was checked with `actionlint`, and every command in it
-  was run locally.
+- **GitHub Actions itself** only runs on GitHub. The workflow is checked with `actionlint`. The Docker images are
+  built and started only in CI (the development sandbox has no network inside image builds).
 - **Real notification vendors**: none is integrated; the development provider simulates outages and crashes.
 - **Multi-instance behaviour**: ClinicIT is deployed as one instance ([OPERATIONS.md](OPERATIONS.md)).
 - **Load at production scale**: the index review used 60 simulated clinic days (35,000 history events), not a

@@ -14,6 +14,13 @@ system, not a target architecture.
 
 There is no Redis, message broker or second database.
 
+## Containers
+
+`Dockerfile` (API), `ml/Dockerfile` and `frontend/Dockerfile` build the three images; each runs as a non-root user.
+`compose.yaml` runs all of them with PostgreSQL on one machine for evaluation (see the README). It is **not** a
+production setup: it runs without the `prod` profile and binds every port to 127.0.0.1. CI builds the images and
+smoke-tests the compose stack on every pull request (`scripts/ci/compose-smoke.sh`).
+
 ## Configuration
 
 Start the API with `SPRING_PROFILES_ACTIVE=prod`. Every setting is an environment variable; `.env.example` lists them
@@ -42,6 +49,7 @@ any bean is created (so before migrations) and refuses to start, listing every p
 | `CLINICIT_SESSION_TTL` | `PT12H` | staff login lifetime |
 | `PORT`, `MANAGEMENT_PORT` | `8080`, `8081` | public API; internal probes and metrics |
 | `CLINICIT_BOOTSTRAP_*` | *(none)* | first clinic and admin on an empty database |
+| `clinicit.public-status.*` | `PT1M`, 300 requests, 20 unknown codes | per-address limit on the patient status page ([SECURITY.md](SECURITY.md#public-patient-status)) |
 
 **Development defaults are safe by construction.** Without the prod profile the app talks to a local database, allows
 no cross-origin calls, never sends a real message (the development provider has no network access), and has the ML
@@ -99,6 +107,8 @@ per-clinic figures are the analytics module's job.
 |---|---|---|
 | `http_server_requests_seconds{uri,method,status,outcome}` | histogram | every API request; URIs are templates (`/api/v1/queue-entries/{id}`), so ids and status codes never become labels |
 | `hikaricp_connections_{active,idle,pending}`, `hikaricp_connections_timeout_total` | gauge / counter | database pool health |
+| `clinicit_appointments_total{status}` | counter | appointments reaching each status: `BOOKED` is creation, `COMPLETED` completion, `CANCELLED` and `NO_SHOW` losses |
+| `clinicit_public_status_rejected_total` | counter | patient status requests refused by the per-address rate limit |
 | `clinicit_queue_joins_total`, `clinicit_queue_calls_total` | counter | committed check-ins and calls |
 | `clinicit_queue_transitions_total{to}` | counter | IN_CONSULTATION, COMPLETED, SKIPPED, WAITING (requeue), NO_SHOW |
 | `clinicit_queue_wait_seconds` | histogram | check-in to first call |
@@ -111,7 +121,7 @@ per-clinic figures are the analytics module's job.
 | `clinicit_wait_estimates_total{source,reason}` | counter | estimates by MODEL/BASELINE; the BASELINE share is the fallback rate |
 | `clinicit_wait_estimates_cache_total{result}` | counter | hit / miss |
 
-Queue metrics are recorded **after commit**, so rolled-back operations are never counted (a test checks this).
+Appointment and queue metrics are recorded **after commit**, so rolled-back operations are never counted (a test checks this).
 
 Suggested alerts: readiness DOWN; `hikaricp_connections_pending > 0` for minutes; 5xx rate; `clinicit_notifications_pending`
 growing while `deliveries{outcome="sent"}` is flat; ML fallback rate high after a model deploy.
@@ -136,8 +146,8 @@ only to browsers connected to the same instance. Running two instances behind a 
    their next reload.
 2. **Slower socket revocation on other instances:** a logout closes the user's sockets on the instance that handled
    it immediately; on others, the minute-by-minute revalidation closes them (it re-checks tokens in the database).
-3. **Per-instance caches:** wait-estimate caching and the ML back-off are per instance (only less efficient, not
-   wrong).
+3. **Per-instance caches and limits:** wait-estimate caching, the ML back-off and the patient status page's rate
+   limit are per instance (N instances allow N times the rate; less strict, not wrong).
 
 Everything else is already multi-instance safe: tokens, locks, sessions, login throttling, the outboxes and
 notification claiming all live in PostgreSQL, and the scheduled cleanups are idempotent.

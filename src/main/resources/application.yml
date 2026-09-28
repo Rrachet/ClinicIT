@@ -56,6 +56,12 @@ clinicit:
     timeout: ${CLINICIT_ML_TIMEOUT:PT0.8S}
     failure-backoff: PT30S
     cache-ttl: PT60S
+  public-status:
+    # Per client IP, per window, on the anonymous patient status page. Requests are generous
+    # (a waiting room shares one address); unknown codes are few (guessing).
+    window: PT1M
+    max-requests-per-ip: 300
+    max-misses-per-ip: 20
   cors:
     # Comma-separated exact origins of the web frontend, e.g. https://app.example.com
     allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS:}
