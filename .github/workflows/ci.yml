@@ -148,3 +148,13 @@ jobs:
           name: e2e-results
           path: frontend/test-results
           retention-days: 7
+
+  compose:
+    name: Docker Compose stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    needs: [backend, ml, frontend]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, start and smoke-test every service
+        run: scripts/ci/compose-smoke.sh

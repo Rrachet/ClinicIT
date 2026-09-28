@@ -1,0 +1,4 @@
+# The API image needs only pom.xml and src/.
+*
+!pom.xml
+!src/

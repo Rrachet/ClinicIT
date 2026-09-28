@@ -192,6 +192,13 @@ Doctors can read any patient in their clinic by id. That is the one clinic-wide 
   internal ids or model details. A test pins the exact set of fields.
 - **Expiry and caching:** unknown codes and codes from past queue days both return 404. Responses are
   `Cache-Control: no-store`.
+- **Rate limit:** per client address, at most 300 requests and 20 unknown codes a minute
+  (`clinicit.public-status.*`). A waiting room sharing one Wi-Fi address stays well inside the first; the second
+  stops code guessing before it costs database queries. Past either limit every status request from that address
+  gets `429` with `Retry-After` until the minute ends; the patient page keeps the last status and retries. The
+  counters are in memory, per instance, and hold addresses only for the current minute; addresses are never
+  logged. Refusals are counted in `clinicit_public_status_rejected_total`.
+- **Read-only:** the endpoint has only `GET`; nothing a patient does changes the queue.
 - **Referrers:** the frontend sends `Referrer-Policy: no-referrer`, so the code is never leaked in a Referer header.
 - **Tests:** they check that the code grants nothing else, for example it doesn't work as a bearer token.
 - **How patients get the code:** from Phase 6 it is sent to the patient's phone in the "checked in" message

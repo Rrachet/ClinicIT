@@ -1,0 +1,82 @@
+# ClinicIT on one machine, for evaluation and local development: PostgreSQL, the API, the
+# wait-time ML service and the web app.
+#
+#   docker compose up --build        then open http://localhost:3000
+#
+# This is NOT a production deployment (docs/DEPLOYMENT.md). The API runs without the prod
+# profile: notifications are only recorded, never sent, and the database password is a local
+# default. Every port is bound to 127.0.0.1, so nothing is reachable from other machines.
+# Override any ${...} value in a .env file next to this one (never commit it).
+
+name: clinicit
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: clinicit
+      POSTGRES_USER: clinicit
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-clinicit}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "clinicit", "-d", "clinicit"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    # Not published: only the API talks to the database.
+
+  ml:
+    build: ./ml
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    # Not published: only the API calls it. The API works without it (baseline estimates).
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+      ml:
+        condition: service_started
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/clinicit
+      DB_USERNAME: clinicit
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-clinicit}
+      CLINICIT_ML_BASE_URL: http://ml:8000
+      CLINICIT_CORS_ALLOWED_ORIGINS: http://localhost:3000
+      CLINICIT_PUBLIC_APP_URL: http://localhost:3000
+      # First start only (empty database): the first clinic and its admin. Local demo values;
+      # change them in .env. The prod profile never uses these defaults.
+      CLINICIT_BOOTSTRAP_CLINIC_NAME: ${CLINICIT_BOOTSTRAP_CLINIC_NAME:-ClinicIT Demo Clinic, Hyderabad}
+      CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE: Asia/Kolkata
+      CLINICIT_BOOTSTRAP_ADMIN_EMAIL: ${CLINICIT_BOOTSTRAP_ADMIN_EMAIL:-admin@demo.clinicit.local}
+      CLINICIT_BOOTSTRAP_ADMIN_PASSWORD: ${CLINICIT_BOOTSTRAP_ADMIN_PASSWORD:-local-demo-only-2026}
+    ports:
+      - "127.0.0.1:8080:8080"
+      # 8081 (probes, metrics) stays inside the compose network.
+    healthcheck:
+      # bash (not sh): /dev/tcp is a bash feature, and the JRE image has neither curl nor wget.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      interval: 5s
+      timeout: 3s
+      start_period: 30s
+      retries: 30
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        # The browser calls the API directly, so this is the address as seen from the browser.
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  db-data:
