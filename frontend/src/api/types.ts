@@ -298,3 +298,33 @@ export interface WaitEstimates {
   queueDate: string;
   entries: WaitEstimate[];
 }
+
+export interface TrendDay {
+  date: string;
+  scheduled: number;
+  cancelled: number;
+  noShows: number;
+  checkedIn: number;
+  completed: number;
+  completionRate: number | null;
+  noShowRate: number | null;
+  medianWaitSeconds: number | null;
+  averageConsultationSeconds: number | null;
+}
+
+export interface DoctorLoad {
+  doctorId: string;
+  doctorName: string;
+  completed: number;
+  consultationSeconds: number | null;
+  daysWorked: number;
+  completedPerDayWorked: number | null;
+}
+
+export interface Trends {
+  from: string;
+  to: string;
+  doctorId: string | null;
+  days: TrendDay[];
+  doctors: DoctorLoad[];
+}

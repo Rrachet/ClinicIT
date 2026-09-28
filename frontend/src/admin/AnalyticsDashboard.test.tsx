@@ -1,7 +1,7 @@
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { DailySummary, DoctorAnalytics, QueueAnalytics, WaitTimes } from "@/api/types";
+import type { DailySummary, DoctorAnalytics, QueueAnalytics, Trends, WaitTimes } from "@/api/types";
 import { RequireRole } from "@/auth/RequireRole";
 import { apiError, fakeApi } from "@/test/fakeApi";
 import { CLINIC, MEHTA, session, SHARMA } from "@/test/fixtures";
@@ -59,6 +59,25 @@ const DOCTORS: DoctorAnalytics = {
   ],
 };
 
+function trendDay(date: string, scheduled: number, completed: number, medianWaitSeconds: number | null) {
+  return {
+    date, scheduled, cancelled: 0, noShows: scheduled - completed, checkedIn: completed, completed,
+    completionRate: scheduled ? completed / scheduled : null, noShowRate: scheduled ? (scheduled - completed) / scheduled : null,
+    medianWaitSeconds, averageConsultationSeconds: medianWaitSeconds === null ? null : 600,
+  };
+}
+
+const TRENDS: Trends = {
+  from: "2026-03-09",
+  to: CLINIC.today,
+  doctorId: null,
+  days: [trendDay("2026-03-09", 10, 9, 900), trendDay(CLINIC.today, 4, 2, 1200)],
+  doctors: [
+    { doctorId: MEHTA.id, doctorName: "Dr. Mehta", completed: 5, consultationSeconds: 3000, daysWorked: 2, completedPerDayWorked: 2.5 },
+    { doctorId: SHARMA.id, doctorName: "Dr. Sharma", completed: 6, consultationSeconds: 3600, daysWorked: 1, completedPerDayWorked: 6 },
+  ],
+};
+
 describe("AnalyticsDashboard", () => {
   let api: ReturnType<typeof fakeApi>;
 
@@ -70,7 +89,8 @@ describe("AnalyticsDashboard", () => {
       .route("GET /api/v1/analytics/today", () => ({ body: SUMMARY }))
       .route("GET /api/v1/analytics/wait-times", () => ({ body: WAITS }))
       .route("GET /api/v1/analytics/queue", () => ({ body: QUEUE }))
-      .route("GET /api/v1/analytics/doctors", () => ({ body: DOCTORS }));
+      .route("GET /api/v1/analytics/doctors", () => ({ body: DOCTORS }))
+      .route("GET /api/v1/analytics/trends", () => ({ body: TRENDS }));
     vi.stubGlobal("fetch", api.fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -83,6 +103,33 @@ describe("AnalyticsDashboard", () => {
       { session: session(role) },
     );
   }
+
+  it("shows the last two weeks day by day and each doctor's workload", async () => {
+    open();
+    const daily = await screen.findByRole("table", { name: "Daily trends" });
+    const rows = within(daily).getAllByRole("row").slice(1);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent("Mon, 9 Mar10990%10%15 min");
+    expect(rows[1]).toHaveTextContent("Tue, 10 Mar4250%50%20 min");
+
+    const workload = screen.getByRole("table", { name: "Doctor workload · 14 days" });
+    expect(within(workload).getByRole("row", { name: /Dr. Sharma/ })).toHaveTextContent("Dr. Sharma616.01 h 00 min");
+
+    // Filtering by doctor asks the backend for that doctor's trends.
+    await userEvent.selectOptions(screen.getByRole("combobox", { name: "Doctor" }), SHARMA.id);
+    await waitFor(() =>
+      expect(api.callsTo("GET", "/api/v1/analytics/trends").some((c) => c.path.includes(`doctorId=${SHARMA.id}`))).toBe(true),
+    );
+  });
+
+  it("keeps the day's figures when trends cannot be loaded", async () => {
+    api.route("GET /api/v1/analytics/trends", () => ({ status: 503, body: { status: 503, code: "INTERNAL_ERROR", message: "x" } }));
+    open();
+    await screen.findByRole("region", { name: "Today" });
+    const trends = await screen.findByRole("region", { name: "Last 14 days" });
+    expect(await within(trends).findByRole("alert")).toBeInTheDocument();
+    expect(screen.getByTestId("current-queue-length")).toBeInTheDocument();
+  });
 
   it("shows today's figures as the backend computed them", async () => {
     open();
