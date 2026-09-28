@@ -109,6 +109,22 @@ describe("ReceptionConsole", () => {
     expect(screen.getByRole("button", { name: "Call #7" })).toBeEnabled();
   });
 
+  it("shows today's counts, using the live queue status", async () => {
+    const client = await open();
+    const count = (label: string) => screen.getByTestId(`count-${label}`);
+    expect(count("Appointments")).toHaveTextContent("3");
+    expect(count("Expected")).toHaveTextContent("1");
+    expect(count("Here")).toHaveTextContent("2");
+
+    act(() => client.connect());
+    act(() => client.emit(event({ queueEntryId: "qa", appointmentId: "a", entryVersion: 1, tokenNumber: 7, status: "CALLED" })));
+    act(() =>
+      client.emit(event({ queueEntryId: "qa", appointmentId: "a", entryVersion: 2, tokenNumber: 7, status: "IN_CONSULTATION", type: "PATIENT_STARTED_CONSULTATION" })),
+    );
+    await waitFor(() => expect(count("With a doctor")).toHaveTextContent("1"));
+    expect(count("Here")).toHaveTextContent("1");
+  });
+
   it("renders today's appointments and each doctor's queue with large tokens", async () => {
     await open();
     const sharma = screen.getByRole("article", { name: "Queue for Dr. Sharma" });

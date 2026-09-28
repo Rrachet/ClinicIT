@@ -19,6 +19,7 @@ const ADMIN_LINKS = [
   { href: "/reception", label: "Reception" },
   { href: "/admin", label: "Analytics" },
   { href: "/admin/schedules", label: "Schedules" },
+  { href: "/admin/team", label: "Team" },
 ];
 
 export function AppHeader({ title, clinicName, day, feed }: { title: string; clinicName?: string; day?: string; feed?: FeedStatus }) {

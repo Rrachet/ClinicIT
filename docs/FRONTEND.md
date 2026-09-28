@@ -7,8 +7,10 @@ and the STOMP WebSocket; it has no server-side logic of its own.
 |---|---|---|---|
 | Today's Clinic (reception console) | `/reception` | RECEPTIONIST, ADMIN | clinic WebSocket topic |
 | My Queue (doctor console) | `/doctor` | DOCTOR | own doctor topic |
-| Patient queue status | `/status/{code}` | anyone holding the link, no login | polls a public endpoint every 15 s |
+| Patient queue status | `/status/{code}` | anyone holding the link, no login | polls a public endpoint: every 15 s, every 5 s when next or called |
 | Clinic analytics | `/admin` | ADMIN | refreshes every minute ([ANALYTICS.md](ANALYTICS.md)) |
+| Doctor schedules | `/admin/schedules` | ADMIN | — ([SCHEDULING.md](SCHEDULING.md)) |
+| Team and clinic | `/admin/team` | ADMIN | — (doctors, staff accounts and roles, disabling, clinic name) |
 | Sign in | `/login` | — | — |
 
 ## Structure
@@ -92,8 +94,11 @@ available to copy as a fallback.
 
 - **What the page shows:** token, the token now being served, patients ahead, status, and a clear "You're next"
   or "It's your turn".
-- **How it updates:** it polls the public endpoint every 15 seconds while the page is visible. It **never** uses
-  the staff WebSocket.
+- **How it updates:** it polls the public endpoint while the page is visible: every 15 seconds, and every 5
+  seconds once the patient is next or has been called, so "It's your turn" appears within seconds without a
+  refresh. That is at most 12 requests a minute per phone, well inside the endpoint's per-address rate limit.
+  It **never** uses the staff WebSocket: patients have no login, and polling a read-only endpoint by an
+  unguessable code keeps the anonymous surface small.
 - **What it can't do:** see names, see other patients, or act on the queue. The code stops working after the
   queue day.
 - **Wait time:** an estimated range ("17–31 min") while waiting, with a note that it is an estimate, not an
@@ -122,6 +127,8 @@ endpoints.
   - The token is the biggest thing on every screen.
   - Reception keeps one screen: doctor cards with the "Now serving" token and a Call button for each doctor, the
     day's appointments with the next action as the primary button, and a booking panel that is always visible.
+  - Today's counts sit above everything: appointments, expected, here, with a doctor, completed, cancelled or
+    no-show. They follow the doctor filter and the live queue.
   - For a patient at the desk, "Patient is here now" books a walk-in, confirms, marks arrived and queues in one
     submit. These are four normal API calls, each validated by the server. A walk-in is booked for the server's
     "now", so there is no time to pick.
@@ -189,6 +196,7 @@ tested by mistake.
 | `vertical-slice` | Receptionist and doctor sign in → register patient → book → confirm → arrive → join → call next → doctor's screen updates live (no reload) → start → complete → reception sees it live |
 | `workflows` | Walk-in check-in, with the patient following on a phone (anonymous, polling, no staff calls) through "You're next" and "It's your turn" · skip, back in queue, no-show and cancel, with confirmations · no-show for a confirmed patient who never came · a doctor sees only their own queue · role gating, wrong password, and sign-out revoking the token on the server |
 | `scheduling` | An admin sets a doctor's week, appointment length and a day of leave in the Schedules screen; reception gets "No free slots" on the leave day, the first free slot on the next day, and the following slot once that one is booked |
+| `team` | An admin creates a receptionist on the Team screen, who signs in straight away; disabling the account makes their token fail on the server and their next page load lands on sign-in ("session ended") |
 | `analytics` | A walk-in booked and called at reception, then completed, shows up in the admin's dashboard for that doctor · receptionists have no Analytics link and are redirected from `/admin` |
 | `wait-estimates` | The real ML service answers with its model; reception and the patient see estimates that update as the queue moves |
 | `visual-review` | Opt-in (`CAPTURE_SCREENSHOTS=1`): screenshots of all screens for review |

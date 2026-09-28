@@ -14,6 +14,7 @@ import type {
   QueueAnalytics,
   QueueBoard,
   QueueEntry,
+  Role,
   TimeOff,
   User,
   WaitEstimates,
@@ -31,7 +32,14 @@ export function clinicApi(http: ApiClient) {
     me: () => http.get<User>("/api/v1/auth/me"),
 
     clinic: () => http.get<Clinic>("/api/v1/clinic"),
+    renameClinic: (name: string) => http.put<Clinic>("/api/v1/clinic", { body: { name } }),
     doctors: () => http.get<Doctor[]>("/api/v1/doctors"),
+    createDoctor: (body: { displayName: string; specialization?: string }) =>
+      http.post<Doctor>("/api/v1/doctors", { body }),
+    users: () => http.get<User[]>("/api/v1/users"),
+    createUser: (body: { email: string; fullName: string; password: string; role: Role; doctorProfileId?: string }) =>
+      http.post<User>("/api/v1/users", { body }),
+    disableUser: (userId: string) => http.post<User>(`/api/v1/users/${id(userId)}/disable`),
     schedule: (doctorId: string) => http.get<DoctorSchedule>(`/api/v1/doctors/${id(doctorId)}/schedule`),
     updateSchedule: (doctorId: string, body: { appointmentMinutes: number; weeklyHours: WorkingDay[] }) =>
       http.put<DoctorSchedule>(`/api/v1/doctors/${id(doctorId)}/schedule`, { body }),
