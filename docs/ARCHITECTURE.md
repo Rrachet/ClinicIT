@@ -37,6 +37,8 @@ logic and no database access.
 - history: the immutable operational history (`operational_events`). The appointment and queue services append one event per transition inside the transition's transaction; nothing updates or deletes it (enforced by a database trigger)
 - analytics: read-only operational metrics computed in PostgreSQL from that history, clinic-scoped and in clinic-local time (see [ANALYTICS.md](ANALYTICS.md))
 - schedule: doctors' weekly hours, breaks, appointment length and time off (Phase 10), the booking rules the appointment module applies, and availability. Clinic-local wall-clock times throughout (see [SCHEDULING.md](SCHEDULING.md))
+- noshow: the advisory no-show risk flag and its temporal evaluation (Phase 12). A transparent rule on the patient's own attendance, judged "as of" a moment from the immutable history; read-only, and nothing else depends on it (see [NO_SHOW_RISK.md](NO_SHOW_RISK.md))
+- demo: loads the demo clinic into an empty database when enabled; refused in production (see [DEMO.md](DEMO.md))
 - prediction: estimated waits (Phase 8). Builds features "as of now" from the operational history, calls the Python ML service (`ml/`, FastAPI) through the `WaitTimeModelClient` port with a short timeout, and falls back to a deterministic baseline. Read-only; the queue and appointment modules never call it (see [AI.md](AI.md))
 - common: error handling (one `ApiError` shape), shared exceptions, clock and scheduling configuration
 - health: the public liveness endpoint
