@@ -49,7 +49,7 @@ use of the server's timezone fails a test.
 | `ml` | `pytest` | includes retraining on the committed dataset and checking it reproduces the committed report |
 | `frontend` | `npm ci`, tests, typecheck, lint, production build | |
 | `e2e` | `scripts/e2e.sh` with its own PostgreSQL service | runs after the three above pass |
-| `compose` | `scripts/ci/compose-smoke.sh`: builds all images, `docker compose up`, checks readiness, admin login, API→ML, the web app's CSP, and that the management port is not published | runs after the three above pass |
+| `compose` | `scripts/ci/compose-smoke.sh`: builds all images, `docker compose up`, checks readiness, the demo admin's login, today's demo queue and trends, API→ML, the web app's CSP, and that the management port is not published | runs after the three above pass |
 
 The first three run in parallel. Maven, pip and npm caches are keyed on `pom.xml`, `ml/requirements*.txt` and
 `frontend/package-lock.json`. A newer push cancels the running build of the same branch. On failure, the Surefire
@@ -67,6 +67,7 @@ reports and the Playwright results (with server logs) are uploaded as artifacts.
 | ML fallback | `WaitTimePredictionIntegrationTest`: service down, timeout, 8 kinds of invalid answer, back-off, cache, clinic scoping, queue operations never call the ML service, and the ML metrics |
 | Production config | `ProductionConfigurationCheckTest`, including starting the real application with `prod` and no configuration |
 | Health | `ObservabilityIntegrationTest` (probes and metrics on the internal port, nothing else exposed, request ids, metrics only after commit); `ProbesWithoutDatabaseTest` (database unreachable: liveness UP, readiness 503) |
+| Demo data | `DemoDataIntegrationTest`: loads completely into an empty database only, logins work, today has every state, history is chronological with gap-free tokens and feeds the trends; the prod profile refuses it |
 | Log safety | `LogSafetyIntegrationTest`: a full flow logs no password, token, phone, name, reason, status code or message text; database errors carry no row contents |
 
 Many of these were checked by **mutation**: the safeguard was removed, the test failed, then it was put back.

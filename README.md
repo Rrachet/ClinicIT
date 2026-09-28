@@ -75,9 +75,18 @@ skipped.
 docker compose up --build
 ```
 
-Then open http://localhost:3000 and sign in as the local demo admin `admin@demo.clinicit.local` /
-`local-demo-only-2026` (change both in a `.env` file: `CLINICIT_BOOTSTRAP_ADMIN_EMAIL`,
-`CLINICIT_BOOTSTRAP_ADMIN_PASSWORD`). This starts PostgreSQL, the API, the wait-time ML service and the web app, all
+Then open http://localhost:3000. The first start loads the **demo clinic** ([docs/DEMO.md](docs/DEMO.md)):
+ClinicIT Demo Clinic, Hyderabad, with three doctors, 18 fictional patients, two weeks of history and today's queue
+in every state.
+
+| Sign in as | Email | Password |
+|---|---|---|
+| Admin | `admin@demo.clinicit.local` | `local-demo-only-2026` |
+| Receptionist | `reception@demo.clinicit.local` | same |
+| Doctor | `ananya.reddy@demo.clinicit.local` (also `farhan.siddiqui@…`, `kavya.iyer@…`) | same |
+
+These are local demo credentials, published on purpose; change the password with `CLINICIT_DEMO_PASSWORD` in a
+`.env` file before the first start. Compose starts PostgreSQL, the API, the wait-time ML service and the web app, all
 bound to 127.0.0.1. It is for evaluation only; production is described in [docs/OPERATIONS.md](docs/OPERATIONS.md).
 `docker compose down -v` removes everything, including the database.
 

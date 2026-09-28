@@ -81,6 +81,8 @@ Doctors get only their own figures; another doctor's `doctorId` returns 403.
 - GET  /api/v1/analytics/doctors?date=                per doctor: patients handled, avg wait, avg consultation, utilization
 - GET  /api/v1/analytics/queue?date=&doctorId=        current queue length; per hour: joined, completed, waiting
 - GET  /api/v1/analytics/no-shows?from=&to=&doctorId= no-shows and cancellations for a range (≤ 366 days)
+- GET  /api/v1/analytics/trends?from=&to=&doctorId=   per day: scheduled, completed, completion and no-show rates, median wait,
+                                                       avg consultation; per doctor: workload (default 14 days, ≤ 92)
 
 ## Wait-time estimates (Phase 8)
 
