@@ -11,6 +11,7 @@ import { longDate } from "@/ui/format";
 import { useAsync } from "@/ui/useAsync";
 import { barPercent, delay, duration, hourLabel, hourlyRows, percent } from "./analyticsView";
 import { Bar } from "./Bar";
+import { NoShowRiskPanel } from "./NoShowRiskPanel";
 import { TrendsPanel } from "./TrendsPanel";
 
 const REFRESH_MS = 60_000;
@@ -241,6 +242,7 @@ export function AnalyticsDashboard() {
 
         {/* Keyed by doctor: its own loading and errors, so a slow range never holds up the day's figures. */}
         <TrendsPanel key={doctorId || "all"} api={api} doctorId={doctorId || undefined} doctorName={selectedDoctor?.displayName} />
+        <NoShowRiskPanel api={api} />
       </main>
     </div>
   );

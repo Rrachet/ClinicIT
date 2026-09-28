@@ -41,6 +41,21 @@ export function ReceptionConsole() {
   const appointments = appointmentList.data ?? [];
   const reloadAppointments = appointmentList.reload;
 
+  // Advisory no-show flags for booked appointments, refetched only when that set changes.
+  // A failure just means no flags: nothing at the desk depends on them.
+  const expectedKey = appointments
+    .filter((a) => (a.status === "BOOKED" || a.status === "CONFIRMED") && !a.walkIn)
+    .map((a) => a.id)
+    .sort()
+    .join(",");
+  const riskList = useAsync(
+    useCallback(() => (today && expectedKey ? api.noShowRisk(today) : Promise.resolve([])), [api, today, expectedKey]),
+  );
+  const risks = useMemo(
+    () => Object.fromEntries((riskList.data ?? []).map((risk) => [risk.appointmentId, risk])),
+    [riskList.data],
+  );
+
   // Live queue changes also change appointment statuses: refresh the list, debounced.
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const scheduleRefresh = useCallback(() => {
@@ -168,6 +183,7 @@ export function ReceptionConsole() {
               busyKey={busyKey}
               onAction={onAction}
               onShowLink={(appointmentId, code, token) => setLink({ appointmentId, code, token })}
+              risks={risks}
             />
           </section>
 

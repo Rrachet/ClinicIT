@@ -27,7 +27,8 @@ describe("ReceptionConsole", () => {
     api = fakeApi()
       .route("GET /api/v1/clinic", () => ({ body: CLINIC }))
       .route("GET /api/v1/doctors", () => ({ body: [SHARMA, MEHTA] }))
-      .route("GET /api/v1/appointments", () => ({ body: appointments }));
+      .route("GET /api/v1/appointments", () => ({ body: appointments }))
+      .route("GET /api/v1/no-show-risk", () => ({ body: [] }));
     estimateStatus = 200;
     // Boards and wait estimates differ per doctor, so they are served here by doctorId.
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -214,6 +215,27 @@ describe("ReceptionConsole", () => {
     );
     expect(await screen.findByText(/Booked Person moved to 2026-03-10 at 15:00/)).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it("marks an elevated no-show risk as advice, and nothing else changes", async () => {
+    api.route("GET /api/v1/no-show-risk", () => ({
+      body: [{ appointmentId: "booked", level: "ELEVATED", priorAppointments: 5, priorMissed: 3, reason: "Missed 3 of their last 5 appointments here" }],
+    }));
+    await open();
+    const row = await screen.findByTestId("appointment-booked");
+    const badge = await within(row).findByText("No-show risk: Elevated");
+    expect(badge).toHaveAttribute("title", "Missed 3 of their last 5 appointments here. Advisory only: consider a reminder call.");
+    // The same actions as for anyone else: confirming and cancelling are unaffected.
+    expect(within(row).getByRole("button", { name: "Confirm: Booked Person" })).toBeEnabled();
+    expect(api.callsTo("GET", "/api/v1/no-show-risk")[0].path).toContain(`date=${CLINIC.today}`);
+  });
+
+  it("works without flags when the risk check fails", async () => {
+    api.route("GET /api/v1/no-show-risk", () => ({ status: 503, body: { status: 503, code: "INTERNAL_ERROR", message: "x" } }));
+    await open();
+    await waitFor(() => expect(api.callsTo("GET", "/api/v1/no-show-risk")).toHaveLength(1));
+    expect(screen.queryByText("No-show risk: Elevated")).not.toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("offers no reschedule for a walk-in", async () => {

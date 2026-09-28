@@ -1,6 +1,6 @@
 "use client";
 
-import type { Appointment, Doctor } from "@/api/types";
+import type { Appointment, Doctor, NoShowRisk } from "@/api/types";
 import { itemForAppointment, type QueueState } from "@/queue/queueStore";
 import { Button } from "@/ui/Button";
 import { EmptyState } from "@/ui/Feedback";
@@ -15,6 +15,7 @@ export function AppointmentTable({
   busyKey,
   onAction,
   onShowLink,
+  risks = {},
 }: {
   appointments: Appointment[];
   doctors: Doctor[];
@@ -22,6 +23,8 @@ export function AppointmentTable({
   busyKey: string | null;
   onAction: (appointment: Appointment, action: ReceptionAction) => void;
   onShowLink: (appointmentId: string, statusCode: string, token: number) => void;
+  /** Advisory no-show flags by appointment id; only "Elevated" is shown. */
+  risks?: Record<string, NoShowRisk>;
 }) {
   if (appointments.length === 0) {
     return <EmptyState title="No appointments today yet" hint="Book one with the form on the right." />;
@@ -52,7 +55,17 @@ export function AppointmentTable({
             <tr key={appointment.id} data-testid={`appointment-${appointment.id}`}>
               <td className="mono">{timeOf(appointment.scheduledAt)}</td>
               <td>{item ? <span className="token token-sm">#{item.tokenNumber}</span> : <span className="muted">—</span>}</td>
-              <td>{appointment.patientName ?? "—"}</td>
+              <td>
+                {appointment.patientName ?? "—"}
+                {risks[appointment.id]?.level === "ELEVATED" && (status === "BOOKED" || status === "CONFIRMED") ? (
+                  <>
+                    {" "}
+                    <span className="badge badge-risk" title={`${risks[appointment.id].reason}. Advisory only: consider a reminder call.`}>
+                      No-show risk: Elevated
+                    </span>
+                  </>
+                ) : null}
+              </td>
               <td>{doctorName(appointment.doctorId)}</td>
               <td>
                 <StatusBadge status={status} />

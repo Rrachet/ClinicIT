@@ -8,6 +8,8 @@ import type {
   DoctorAnalytics,
   DoctorSchedule,
   LoginResponse,
+  NoShowRisk,
+  NoShowRiskEvaluation,
   Patient,
   PatientNotification,
   PublicQueueStatus,
@@ -31,6 +33,9 @@ export function clinicApi(http: ApiClient) {
       http.post<LoginResponse>("/api/v1/auth/login", { body: { email, password }, anonymous: true }),
     logout: () => http.post<void>("/api/v1/auth/logout"),
     me: () => http.get<User>("/api/v1/auth/me"),
+    /** Signs the user out everywhere on success (all their tokens are revoked). */
+    changePassword: (currentPassword: string, newPassword: string) =>
+      http.post<void>("/api/v1/auth/password", { body: { currentPassword, newPassword } }),
 
     clinic: () => http.get<Clinic>("/api/v1/clinic"),
     renameClinic: (name: string) => http.put<Clinic>("/api/v1/clinic", { body: { name } }),
@@ -101,6 +106,9 @@ export function clinicApi(http: ApiClient) {
     analyticsTrends: (doctorId?: string) => http.get<Trends>("/api/v1/analytics/trends", { query: { doctorId } }),
     analyticsQueue: (date?: string, doctorId?: string) =>
       http.get<QueueAnalytics>("/api/v1/analytics/queue", { query: { date, doctorId } }),
+
+    noShowRisk: (date: string) => http.get<NoShowRisk[]>("/api/v1/no-show-risk", { query: { date } }),
+    noShowRiskEvaluation: () => http.get<NoShowRiskEvaluation>("/api/v1/no-show-risk/evaluation"),
 
     publicStatus: (code: string) =>
       http.get<PublicQueueStatus>(`/api/v1/public/queue-status/${id(code)}`, { anonymous: true }),
