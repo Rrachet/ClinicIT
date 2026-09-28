@@ -1,5 +1,6 @@
 package com.clinicit.history.application;
 
+import com.clinicit.appointment.application.AppointmentMetrics;
 import com.clinicit.appointment.domain.Appointment;
 import com.clinicit.appointment.domain.AppointmentStatus;
 import com.clinicit.history.domain.OperationalEventType;
@@ -39,18 +40,21 @@ public class LifecycleHistory {
             """;
 
     private final JdbcTemplate jdbc;
+    private final AppointmentMetrics metrics;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    public LifecycleHistory(JdbcTemplate jdbc) {
+    public LifecycleHistory(JdbcTemplate jdbc, AppointmentMetrics metrics) {
         this.jdbc = jdbc;
+        this.metrics = metrics;
     }
 
     /** A new appointment. Records its scheduled time, which later gives the appointment delay. */
     @Transactional(propagation = Propagation.MANDATORY)
     public void booked(Appointment appointment, Actor actor, Instant at) {
         insert(appointment, null, OperationalEventType.BOOKED, null, actor, at);
+        metrics.reached(AppointmentStatus.BOOKED);
     }
 
     /** CONFIRMED, ARRIVED, CANCELLED or NO_SHOW before the patient reached the queue. */
@@ -58,6 +62,7 @@ public class LifecycleHistory {
     public void appointmentChanged(Appointment appointment, AppointmentStatus previous, Actor actor, Instant at) {
         insert(appointment, null, OperationalEventType.ofTransition(previous, appointment.getStatus()),
                 previous, actor, at);
+        metrics.reached(appointment.getStatus());
     }
 
     /** Joined the queue, or any later queue transition (the appointment mirrors the entry). */
@@ -67,6 +72,7 @@ public class LifecycleHistory {
     ) {
         insert(appointment, entry, OperationalEventType.ofTransition(previous, appointment.getStatus()),
                 previous, actor, at);
+        if (appointment.getStatus() != previous) metrics.reached(appointment.getStatus());
     }
 
     private void insert(
