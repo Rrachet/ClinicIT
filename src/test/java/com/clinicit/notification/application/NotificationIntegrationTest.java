@@ -208,6 +208,64 @@ class NotificationIntegrationTest extends PostgresIntegrationTest {
                 .containsEntry("status", "FAILED").containsEntry("attempts", 5).containsEntry("last_error", "SIMULATED_OUTAGE");
     }
 
+    /** Runs the retry poller at `at`; returns true if the "process" died mid-send. */
+    private boolean pollAndSurvive(java.time.Instant at) {
+        try {
+            dispatcher.retryDue(at);
+            return false;
+        } catch (DevelopmentNotificationProvider.SimulatedCrash crash) {
+            return true;
+        }
+    }
+
+    @Test
+    void aSendThatDiesMidwayStillUsesAnAttemptSoItCannotRepeatForever() {
+        provider.failNextSends(1); // the fast path after check-in hits an outage: attempt 1
+        join("A");
+        provider.crashNextSends(100, false); // every later attempt dies before the vendor accepts it
+
+        int crashes = 0;
+        var at = NOW;
+        for (int i = 0; i < 20 && "PENDING".equals(rows("PATIENT_JOINED_QUEUE").getFirst().get("status")); i++) {
+            at = at.plus(Duration.ofMinutes(3)); // past the backoff and the 2-minute claim lease
+            if (pollAndSurvive(at)) crashes++;
+        }
+
+        // Attempts 2-5 died without reporting back; each was still counted, and then it stopped.
+        assertThat(crashes).isEqualTo(4);
+        assertThat(rows("PATIENT_JOINED_QUEUE").getFirst())
+                .containsEntry("status", "FAILED").containsEntry("attempts", 5).containsEntry("last_error", "ATTEMPTS_EXHAUSTED");
+        assertThat(provider.delivered()).isEmpty();
+    }
+
+    @Test
+    void aCrashAfterTheVendorAcceptedIsRetriedWithTheSameIdempotencyKeySoThePatientGetsOneMessage() {
+        provider.crashNextSends(1, true); // the fast path's send is accepted, then the sender dies
+        join("A");
+        UUID id = (UUID) rows("PATIENT_JOINED_QUEUE").getFirst().get("id");
+        assertThat(rows("PATIENT_JOINED_QUEUE").getFirst()).containsEntry("status", "PENDING").containsEntry("attempts", 1);
+
+        // Once the lease runs out, the poller tries again (at-least-once)...
+        assertThat(pollAndSurvive(NOW.plus(Duration.ofMinutes(3)))).isFalse();
+
+        // ...and the vendor, given the same key, does not deliver it twice.
+        assertThat(rows("PATIENT_JOINED_QUEUE").getFirst()).containsEntry("status", "SENT").containsEntry("attempts", 2);
+        assertThat(provider.delivered()).hasSize(1);
+        assertThat(provider.delivered().getFirst().idempotencyKey()).isEqualTo(id.toString());
+    }
+
+    @Test
+    void aClaimedMessageIsNotClaimedAgainWhileItsLeaseRuns() {
+        provider.failNextSends(1);
+        join("A");
+        provider.crashNextSends(1, false);
+        assertThat(pollAndSurvive(NOW.plus(Duration.ofMinutes(1)))).isTrue(); // claimed, died
+
+        // Within the 2-minute lease nobody else picks it up, even though it is still PENDING.
+        assertThat(dispatcher.retryDue(NOW.plus(Duration.ofMinutes(2)))).isZero();
+        assertThat(dispatcher.retryDue(NOW.plus(Duration.ofMinutes(4)))).isEqualTo(1);
+    }
+
     @Test
     void anOutOfDateMessageIsNeverSent() {
         join("A");
@@ -270,7 +328,8 @@ class NotificationIntegrationTest extends PostgresIntegrationTest {
         };
         NotificationDispatcher onlyWhatsapp = new NotificationDispatcher(jdbc,
                 new NotificationProviders(List.of(whatsappOnly), properties), properties,
-                new NotificationExecutor(properties), clock);
+                new NotificationExecutor(properties), clock,
+                new NotificationMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), null));
 
         onlyWhatsapp.sendIfDue(id);
 

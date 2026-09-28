@@ -41,9 +41,21 @@ logic and no database access.
 - health: the public liveness endpoint
 - ml/ (separate Python process): the trained wait-time model behind `POST /predict/wait-time`. It holds no business logic and has no database access
 
+## Operations
+
+- **One API instance.** The WebSocket broker is in-memory; everything else is already multi-instance safe
+  ([OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary)).
+- **Probes and metrics** (Spring Boot Actuator, Micrometer, Prometheus) run on an internal management port.
+  Liveness never depends on PostgreSQL or the ML service; readiness includes PostgreSQL.
+- **Configuration:** a `prod` profile that refuses unsafe settings at startup.
+- **Logging:** structured JSON logs in production, a request id per request, and no patient data or secrets.
+- **CI:** GitHub Actions runs the backend against PostgreSQL, the ML tests, the frontend checks and the browser E2E on
+  every pull request ([TESTING.md](TESTING.md)).
+
 ## Technology choices
 
-- Java 21, Spring Boot 3.5 (Web, Data JPA, Security with opaque-token resource server, WebSocket/STOMP), Maven
+- Java 21, Spring Boot 3.5 (Web, Data JPA, Security with opaque-token resource server, WebSocket/STOMP, Actuator), Maven
+- Micrometer with the Prometheus registry for metrics
 - PostgreSQL 16 with Flyway. Integration tests run against real PostgreSQL, never an in-memory substitute.
 - Next.js 16 / React 19 frontend
 - Python 3.11, FastAPI and scikit-learn for the wait-time model

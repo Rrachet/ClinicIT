@@ -231,6 +231,27 @@ Each protection was checked by breaking it on purpose and confirming a test fail
 unscoped queue-entry lock, a missing role annotation, `permitAll` instead of `authenticated`, and a missing doctor
 ownership check.
 
+## Production hardening (Phase 9)
+
+- **Configuration cannot silently be unsafe.** The `prod` profile has no defaults for credentials, CORS or the public
+  URL, and `ProductionConfigurationCheck` refuses to start with missing values, development passwords, wildcard or
+  non-`https` CORS origins, or the development notification provider ([OPERATIONS.md](OPERATIONS.md)).
+- **Clinic scoping all the way down.** The last id-only lookups (patient names for lists and boards, the public
+  status's doctor) now use clinic-scoped queries, and the notification planner's joins match on `clinic_id` too.
+  `ClinicIsolationIntegrationTest` covers every resource type (patients, appointments, queue entries, doctors,
+  users, notifications, analytics, wait estimates) and proves the database rejects cross-clinic references even from
+  code that bypasses the services.
+- **Actuator is internal.** Probes and metrics are on a separate management port, only `health`, `info` and
+  `prometheus` are exposed, and every other actuator path answers 401. No metric carries clinic, doctor or patient
+  identifiers.
+- **Logs carry no secrets or patient data.** No password, token, token hash, phone, name, reason, message body or
+  status-link code is logged. PostgreSQL error details (which contain row contents) are disabled, and the status code
+  is masked in error logs. A test runs a full flow and checks the captured output.
+- **Request ids.** Each request is tagged with `X-Request-Id`; a client-supplied id is kept only if it is a short safe
+  token, so it cannot inject text into the logs.
+- **Client IPs behind a proxy.** The `prod` profile honours `X-Forwarded-For` only from internal proxy addresses, so
+  a client cannot spoof its IP to evade per-IP login throttling.
+
 ## Known gaps / next steps
 
 - **No password reset** ("forgot password"). The notification channel exists (Phase 6), but only a development

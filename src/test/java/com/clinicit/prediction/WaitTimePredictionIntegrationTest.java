@@ -195,6 +195,59 @@ class WaitTimePredictionIntegrationTest extends PredictionScenario {
         assertThat(ml.requests()).hasSize(3);
     }
 
+    @Autowired io.micrometer.core.instrument.MeterRegistry meters;
+
+    private double estimates(String source, String reason) {
+        var c = meters.find("clinicit.wait_estimates").tags("source", source, "reason", reason).counter();
+        return c == null ? 0 : c.count();
+    }
+
+    private long mlCalls(String outcome) {
+        var t = meters.find("clinicit.ml.requests").tags("outcome", outcome).timer();
+        return t == null ? 0 : t.count();
+    }
+
+    @Test
+    void mlOutcomesAndTheFallbackRateAreMeasured() {
+        long ok = mlCalls("success"), httpErrors = mlCalls("http_error"), timeouts = mlCalls("timeout"),
+                invalid = mlCalls("invalid_prediction");
+        double model = estimates("MODEL", "none"), down = estimates("BASELINE", "ML_UNAVAILABLE"),
+                bad = estimates("BASELINE", "INVALID_PREDICTION"), other = estimates("BASELINE", "OTHER");
+        var skips = meters.find("clinicit.ml.backoff.skips").counter();
+        double skipped = skips == null ? 0 : skips.count();
+
+        modelAnswers(20, 15, 25, "wait-hgb-test-1");
+        estimates();                                        // 3 MODEL estimates
+        ml.respond(body -> Reply.error(503));
+        checkIn(drA);
+        estimates();                                        // HTTP error -> 4 baseline estimates
+        checkIn(drA);
+        estimates();                                        // back-off: not even tried
+        clock.set(clock.instant().plus(Duration.ofSeconds(31)));
+        ml.respond(body -> Reply.slow(3_000, "{}"));
+        estimates();                                        // timeout
+        clock.set(clock.instant().plus(Duration.ofSeconds(31)));
+        ml.respond(body -> Reply.json("{\"schemaVersion\":\"1\",\"modelVersion\":\"v\",\"predictions\":[]}"));
+        estimates();                                        // invalid prediction
+        checkIn(drA);
+        ml.respond(body -> Reply.json(("{\"schemaVersion\":\"1\",\"modelVersion\":\"v\",\"predictions\":["
+                + "{\"source\":\"BASELINE\",\"reason\":\"<script>made-up</script>\"},".repeat(instanceCount(body)))
+                .replaceAll(",$", "") + "]}"));
+        var declined = estimates();                          // the service declines with an unknown reason
+
+        assertThat(mlCalls("success")).isEqualTo(ok + 2);
+        assertThat(mlCalls("http_error")).isEqualTo(httpErrors + 1);
+        assertThat(mlCalls("timeout")).isEqualTo(timeouts + 1);
+        assertThat(mlCalls("invalid_prediction")).isEqualTo(invalid + 1);
+        assertThat(meters.find("clinicit.ml.backoff.skips").counter().count()).isEqualTo(skipped + 1);
+        assertThat(estimates("MODEL", "none")).isEqualTo(model + 3);
+        assertThat(estimates("BASELINE", "ML_UNAVAILABLE")).isGreaterThanOrEqualTo(down + 4);
+        assertThat(estimates("BASELINE", "INVALID_PREDICTION")).isGreaterThan(bad);
+        // Unknown reason text from the ML service never reaches the API or the metrics.
+        assertThat(estimates("BASELINE", "OTHER")).isGreaterThan(other);
+        assertThat(declined.entries()).allSatisfy(e -> assertThat(e.fallbackReason()).isEqualTo("OTHER"));
+    }
+
     @Test
     void aNewModelVersionShowsUpOnTheNextRefresh() {
         modelAnswers(20, 15, 25, "wait-hgb-2026-01");

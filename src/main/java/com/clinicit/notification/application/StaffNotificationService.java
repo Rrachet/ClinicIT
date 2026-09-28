@@ -7,6 +7,8 @@ import com.clinicit.notification.api.NotificationResponse;
 import com.clinicit.notification.domain.Notification;
 import com.clinicit.notification.domain.NotificationRepository;
 import com.clinicit.notification.domain.NotificationStatus;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
@@ -28,6 +30,9 @@ public class StaffNotificationService {
     private final NotificationProperties properties;
     private final ApplicationEventPublisher events;
     private final Clock clock;
+
+    @PersistenceContext
+    private EntityManager entityManager;
 
     public StaffNotificationService(
             NotificationRepository notifications,
@@ -67,9 +72,11 @@ public class StaffNotificationService {
         }
         jdbc.update("""
                 update notifications set status = 'PENDING', max_attempts = attempts + ?, next_attempt_at = ?, updated_at = ?
-                where id = ? and status = 'FAILED'
-                """, properties.maxAttempts(), Timestamp.from(now), Timestamp.from(now), notificationId);
+                where id = ? and clinic_id = ? and status = 'FAILED'
+                """, properties.maxAttempts(), Timestamp.from(now), Timestamp.from(now), notificationId, actor.clinicId());
         events.publishEvent(new NotificationService.Queued(List.of(notificationId)));
-        return notifications.findById(notificationId).map(NotificationResponse::from).orElseThrow();
+        // The row was changed with plain SQL; reload it, or the response would show the cached FAILED state.
+        entityManager.refresh(notification);
+        return NotificationResponse.from(notification);
     }
 }

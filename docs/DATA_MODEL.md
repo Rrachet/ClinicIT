@@ -123,3 +123,38 @@ Core fields:
 - provider, provider_message_id, created_at, sent_at, updated_at
 
 Details: [NOTIFICATIONS.md](NOTIFICATIONS.md).
+
+## Indexes
+
+Reviewed in Phase 9 against each query, with `EXPLAIN ANALYZE` on 60 simulated clinic days (35,000 history events,
+4,900 appointments, 13,700 notifications). Every online query uses an index; the slowest measured was the analytics
+day window at 0.5 ms.
+
+| Query | Index |
+|---|---|
+| Appointments for a clinic and day (reception list, analytics attendance) | `idx_appointment_clinic_schedule (clinic_id, scheduled_at)` |
+| Appointments for a doctor and day | `idx_appointment_doctor_schedule (doctor_id, scheduled_at)` |
+| Clinic-scoped lookups and foreign-key checks by `(id, clinic_id)` | `uk_appointment_id_clinic`, `uk_patient_id_clinic`, `uk_doctor_id_clinic` |
+| Next waiting patient, "doctor busy?", patients ahead, a doctor's board | `idx_queue_doctor_date_status_token (doctor_id, queue_date, status, token_number)` |
+| One active patient per doctor (constraint) | `uk_queue_one_active_per_doctor` (partial) |
+| Public status page by code; entry by appointment | `uk_queue_status_code`, unique `appointment_id` |
+| Token allocation | `queue_token_counters_pkey (clinic_id, queue_date)` |
+| Analytics day and range windows | `idx_operational_events_clinic_time (clinic_id, occurred_at)` |
+| Wait-time features and the estimate cache key | `idx_operational_events_doctor_time (doctor_id, occurred_at)` |
+| An appointment's history, no-show/cancellation lookups | `idx_operational_events_appointment (appointment_id, seq)` |
+| Notification claim (fast path and poller) | primary key; `idx_notification_due (next_attempt_at) WHERE status = 'PENDING'` |
+| Messages for an appointment (front desk) | `idx_notification_clinic_appointment` |
+| Notification dedupe | `uk_notification_dedupe` |
+| Session lookup on every request; revoke all of a user's sessions | `uk_auth_session_token (token_hash)`, `idx_auth_session_user` |
+| Real-time outbox poller and purge | `idx_queue_events_pending`, `idx_queue_events_published` (partial) |
+
+**Deliberately without an index:**
+- The dataset export's joins over the whole history: PostgreSQL hash-joins them (0.75 s for 60 days), and it is an
+  offline job.
+- The 6-hourly notification purge (`status <> 'PENDING' and updated_at < …`): a sequential scan of a table that
+  30-day retention keeps small (18 ms at 13,700 rows). An index would cost a write on every notification update.
+- Expired-session cleanup: sessions live 12 hours, so the table stays small.
+- Patient search by name (a case-insensitive substring match) is limited to the clinic's rows by `idx_patient_clinic_name`. A trigram
+  index would be the next step for large clinics.
+
+`V11` dropped `idx_patient_clinic_phone` and `idx_notification_created`: no query uses them.

@@ -22,6 +22,7 @@ import com.clinicit.queue.domain.QueueTokenAllocator;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -60,6 +61,7 @@ public class QueueService {
     private final QueueEventRecorder events;
     private final PatientRepository patients;
     private final LifecycleHistory history;
+    private final QueueMetrics metrics;
 
     public QueueService(
             QueueEntryRepository entries,
@@ -69,7 +71,8 @@ public class QueueService {
             PatientRepository patients,
             ClinicTime clinicTime,
             QueueEventRecorder events,
-            LifecycleHistory history
+            LifecycleHistory history,
+            QueueMetrics metrics
     ) {
         this.entries = entries;
         this.tokens = tokens;
@@ -79,6 +82,7 @@ public class QueueService {
         this.clinicTime = clinicTime;
         this.events = events;
         this.history = history;
+        this.metrics = metrics;
     }
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
@@ -103,6 +107,7 @@ public class QueueService {
         appointment.transitionTo(AppointmentStatus.WAITING);
         history.queueChanged(appointment, entry, previous, actor, now);
         events.record(entry, null, now);
+        metrics.joined();
 
         return QueueEntryResponse.from(entry);
     }
@@ -132,6 +137,8 @@ public class QueueService {
         next.call(now);
         syncAppointment(actor, next, now);
         events.record(next, QueueStatus.WAITING, now);
+        // Wait until the first call only; a requeued patient's later call is not a new wait.
+        metrics.called(next.getSkippedAt() == null ? Duration.between(next.getCheckedInAt(), now) : null);
         return QueueEntryResponse.from(next);
     }
 
@@ -172,7 +179,7 @@ public class QueueService {
         LocalDate today = clinicTime.today(doctor.getClinicId());
 
         List<QueueEntry> queue = entries.findByDoctorIdAndQueueDateOrderByTokenNumberAsc(doctorId, today);
-        Map<UUID, String> names = patientNames(queue);
+        Map<UUID, String> names = patientNames(doctor.getClinicId(), queue);
 
         return QueueBoardResponse.from(doctorId, today, queue, names);
     }
@@ -187,6 +194,9 @@ public class QueueService {
         transition.accept(entry, now);
         syncAppointment(actor, entry, now);
         events.record(entry, previous, now);
+        metrics.transitioned(entry.getStatus(),
+                entry.getStatus() == QueueStatus.COMPLETED && entry.getConsultationStartedAt() != null
+                        ? Duration.between(entry.getConsultationStartedAt(), now) : null);
         return QueueEntryResponse.from(entry);
     }
 
@@ -199,11 +209,11 @@ public class QueueService {
         history.queueChanged(appointment, entry, previous, actor, now);
     }
 
-    private Map<UUID, String> patientNames(List<QueueEntry> queue) {
+    private Map<UUID, String> patientNames(UUID clinicId, List<QueueEntry> queue) {
         List<UUID> appointmentIds = queue.stream().map(QueueEntry::getAppointmentId).toList();
-        Map<UUID, UUID> patientByAppointment = appointments.findAllById(appointmentIds).stream()
+        Map<UUID, UUID> patientByAppointment = appointments.findByClinicIdAndIdIn(clinicId, appointmentIds).stream()
                 .collect(Collectors.toMap(Appointment::getId, Appointment::getPatientId));
-        Map<UUID, String> nameByPatient = patients.findAllById(patientByAppointment.values()).stream()
+        Map<UUID, String> nameByPatient = patients.findByClinicIdAndIdIn(clinicId, patientByAppointment.values()).stream()
                 .collect(Collectors.toMap(Patient::getId, Patient::getFullName));
 
         return patientByAppointment.entrySet().stream()

@@ -271,6 +271,26 @@ the model soon after it recovers.
 - **Reception screen:** refetches 1.5 s after the queue signature changes (debounced, so a burst of live events
   costs one request) and once a minute while quiet.
 
+## Metrics and failure handling in production
+
+The ML service's failures are classified in `HttpWaitTimeModelClient` (timeout, unreachable, HTTP error, unreadable
+response), and every call is measured:
+
+| Metric | Meaning |
+|---|---|
+| `clinicit_ml_requests_seconds{outcome}` | latency; outcome `success`, `timeout`, `unreachable`, `http_error`, `bad_response`, `invalid_prediction` |
+| `clinicit_ml_backoff_skips_total` | calls not made during the 30 s back-off after a failure |
+| `clinicit_wait_estimates_total{source=MODEL\|BASELINE, reason}` | estimates produced; the BASELINE share is the **fallback rate** |
+| `clinicit_wait_estimates_cache_total{result=hit\|miss}` | how much the per-queue-state cache saves |
+
+Other safeguards:
+- **Reasons from the service are filtered.** A fallback reason the ML service sends is passed on only if ClinicIT
+  knows it; anything else becomes `OTHER`, so arbitrary text from the service never reaches the API or the metrics.
+- **Nothing sensitive is logged:** only the failure kind, never the request.
+- **The queue never depends on the ML service.** No queue or appointment operation calls it, and a test proves check-in,
+  join, call-next, start, complete, skip and requeue all succeed without a single request reaching a hanging service.
+- **Both health probes ignore it.** The ML service is in neither liveness nor readiness ([OPERATIONS.md](OPERATIONS.md)).
+
 ## Model versioning
 
 - **Version format:** `wait-<algorithm>-<hash>`. The hash covers the dataset, the chosen algorithm, the

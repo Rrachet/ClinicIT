@@ -20,7 +20,8 @@ class WaitTimePredictionServiceTest {
             throw new AssertionError("the ML client must not be called when it is disabled");
         };
         var service = new WaitTimePredictionService(null, null, null, null, failIfCalled,
-                new PredictionProperties(null, null, null, null, null), null);
+                new PredictionProperties(null, null, null, null, null), null,
+                new PredictionMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry()));
 
         List<WaitTimeEstimate> estimates = service.predict(List.of(TWO_AHEAD), Instant.now());
 

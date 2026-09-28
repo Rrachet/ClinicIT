@@ -119,6 +119,16 @@ All queue mutations run under `READ COMMITTED` (the Postgres default), with expl
 Locks are always taken in the order *doctor → entry → appointment → counter*, so no two operations can wait on
 each other in a cycle (no deadlocks).
 
+**Implicit locks from later phases.** Queue operations also insert rows: the queue entry, the operational history
+(Phase 7), the real-time outbox (Phase 4) and notifications (Phase 6). Those rows reference the doctor, the
+appointment, the patient and the queue entry, and each foreign-key check takes a `FOR KEY SHARE` lock on the
+referenced row. `KEY SHARE` never waits for the `FOR NO KEY UPDATE` locks above, so these checks cannot join a
+lock cycle or block behind one. `joiningIsNotBlockedWhileCallNextHoldsTheDoctorRow` proves it: a check-in completes
+while call-next holds the doctor row, and the same test fails if that lock is changed to `FOR UPDATE`.
+
+**Not a rule: overlapping appointment times.** A doctor may have several appointments at the same time; walk-ins
+make that normal, and doctor schedules aren't modelled. What *is* enforced is one active patient per doctor (below).
+
 - **Why lock the doctor row for call-next.** "Check that nobody is active, then call the next patient" must be
   atomic. Two receptionists pressing *Call next* together are serialised per doctor. The second one sees the
   first patient already CALLED and gets `DOCTOR_BUSY`. Other doctors are not blocked.

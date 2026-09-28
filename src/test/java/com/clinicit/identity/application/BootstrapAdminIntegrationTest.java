@@ -14,7 +14,7 @@ class BootstrapAdminIntegrationTest extends PostgresIntegrationTest {
     @Autowired org.springframework.transaction.support.TransactionTemplate tx;
 
     private void run(BootstrapAdmin.Properties properties) {
-        BootstrapAdmin bootstrap = new BootstrapAdmin(properties, clinics, users, passwordEncoder);
+        BootstrapAdmin bootstrap = new BootstrapAdmin(properties, clinics, users, passwordEncoder, tx);
         tx.executeWithoutResult(status -> bootstrap.run(new DefaultApplicationArguments()));
     }
 

@@ -53,7 +53,8 @@ class NotificationUnitTest {
     @Test
     void retryDelayDoublesAndIsCapped() {
         NotificationProperties properties = properties(10);
-        NotificationDispatcher dispatcher = new NotificationDispatcher(null, null, properties, null, null);
+        NotificationDispatcher dispatcher = new NotificationDispatcher(null, null, properties, null, null,
+                new NotificationMetrics(new io.micrometer.core.instrument.simple.SimpleMeterRegistry(), null));
         assertThat(dispatcher.backoff(1)).isEqualTo(Duration.ofSeconds(30));
         assertThat(dispatcher.backoff(2)).isEqualTo(Duration.ofSeconds(60));
         assertThat(dispatcher.backoff(4)).isEqualTo(Duration.ofMinutes(4));

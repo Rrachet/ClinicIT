@@ -121,8 +121,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     // Anything else is a bug: log it, but never leak internals to the client.
     @ExceptionHandler(Exception.class)
     ResponseEntity<Object> handleUnexpected(Exception ex, HttpServletRequest request) {
-        log.error("Unhandled error on {} {}", request.getMethod(), request.getRequestURI(), ex);
+        log.error("Unhandled error on {} {}", request.getMethod(), loggablePath(request.getRequestURI()), ex);
         return body(HttpStatus.INTERNAL_SERVER_ERROR, "INTERNAL_ERROR", "Unexpected error", request.getRequestURI());
+    }
+
+    /** The path with a patient's status-link code (a read capability) masked. */
+    static String loggablePath(String uri) {
+        return uri == null ? null : uri.replaceAll("(/public/queue-status/)[^/?]+", "$1***");
     }
 
     private static String codeFor(HttpStatusCode status) {

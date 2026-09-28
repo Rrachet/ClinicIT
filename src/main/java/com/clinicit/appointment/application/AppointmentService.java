@@ -91,7 +91,7 @@ public class AppointmentService {
                 ? repository.findForClinicInRange(clinicId, from, to)
                 : repository.findForDoctorInRange(clinicId, doctorId, from, to);
 
-        Map<UUID, String> names = patients.findAllById(found.stream().map(Appointment::getPatientId).toList())
+        Map<UUID, String> names = patients.findByClinicIdAndIdIn(clinicId, found.stream().map(Appointment::getPatientId).toList())
                 .stream()
                 .collect(Collectors.toMap(Patient::getId, Patient::getFullName));
         return found.stream()
@@ -156,7 +156,8 @@ public class AppointmentService {
     }
 
     private AppointmentResponse respond(Appointment appointment) {
-        String patientName = patients.findById(appointment.getPatientId()).map(Patient::getFullName).orElse(null);
+        String patientName = patients.findByIdAndClinicId(appointment.getPatientId(), appointment.getClinicId())
+                .map(Patient::getFullName).orElse(null);
         return AppointmentResponse.from(appointment, patientName);
     }
 }

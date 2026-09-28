@@ -171,6 +171,35 @@ class QueueConcurrencyIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void joiningIsNotBlockedWhileCallNextHoldsTheDoctorRow() throws Exception {
+        // Joining inserts rows that reference the doctor (queue entry, history, outbox,
+        // notifications). Their foreign-key checks take KEY SHARE locks, which must not wait
+        // for the doctor row lock that call-next holds (FOR NO KEY UPDATE). If call-next used
+        // FOR UPDATE, check-in would stall behind every call-next of that doctor.
+        UUID appointmentId = arrivedAppointment(doctor, patient(clinic, "Walk In")).getId();
+        CountDownLatch locked = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        Future<?> callNextHoldingDoctor = pool.submit(() -> tx.executeWithoutResult(status -> {
+            doctors.findByIdAndClinicIdForUpdate(doctor.getId(), clinic.getId()).orElseThrow();
+            locked.countDown();
+            try {
+                release.await(30, TimeUnit.SECONDS); // far longer than the join may take
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }));
+        assertThat(locked.await(10, TimeUnit.SECONDS)).isTrue();
+
+        Future<QueueEntryResponse> join = pool.submit(() -> queue.join(desk, appointmentId));
+        try {
+            assertThat(join.get(5, TimeUnit.SECONDS).status()).isEqualTo(QueueStatus.WAITING);
+        } finally {
+            release.countDown();
+            callNextHoldingDoctor.get(10, TimeUnit.SECONDS);
+        }
+    }
+
+    @Test
     void concurrentSkipAndStartOfTheSameEntryHaveOneWinner() throws Exception {
         QueueEntryResponse entry = queue.join(desk, arrivedAppointment(doctor, patient(clinic, "Contested")).getId());
         queue.callNext(desk, doctor.getId());

@@ -2,11 +2,21 @@ spring:
   application:
     name: ClinicIT
 
+  # Local-development defaults only. The prod profile (application-prod.yml) has no defaults
+  # and refuses these credentials (ProductionConfigurationCheck).
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/clinicit}
     username: ${DB_USERNAME:clinicit}
     password: ${DB_PASSWORD:clinicit}
     driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+      # Fail a request after 5 s without a free connection instead of hanging for 30 s.
+      connection-timeout: 5000
+      data-source-properties:
+        # PostgreSQL error DETAIL lines can contain row contents (e.g. "Failing row contains
+        # (…name, phone…)"). Keep them out of exception messages, and so out of the logs.
+        logServerErrorDetail: false
 
   jpa:
     open-in-view: false
@@ -54,8 +64,40 @@ clinicit:
   # CLINICIT_BOOTSTRAP_CLINIC_NAME (optional: CLINICIT_BOOTSTRAP_ADMIN_NAME,
   # CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE).
 
+logging:
+  pattern:
+    # Request id (RequestIdFilter) on every log line of a request.
+    correlation: "[%X{requestId:-}] "
+
+# Actuator: health probes and Prometheus metrics on a separate, internal port. It must not be
+# exposed publicly (docs/OPERATIONS.md). The public API keeps GET /api/v1/health.
 management:
+  server:
+    port: ${MANAGEMENT_PORT:8081}
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: always
+      group:
+        # Liveness: is the process able to run at all? Never depends on PostgreSQL or the ML
+        # service, so an outage of either does not get the app restarted in a loop.
+        liveness:
+          include: livenessState,ping
+        # Readiness: can it serve traffic now? Needs the database; the ML service is optional
+        # (estimates fall back to the baseline), so it is deliberately not included.
+        readiness:
+          include: readinessState,db
+  metrics:
+    tags:
+      application: ClinicIT
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        clinicit.queue.wait: true
+        clinicit.consultation.duration: true
+        clinicit.ml.requests: true

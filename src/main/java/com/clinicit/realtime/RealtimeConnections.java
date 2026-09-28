@@ -56,6 +56,11 @@ public class RealtimeConnections {
         return sockets.size();
     }
 
+    /** Connections that completed an authenticated STOMP CONNECT. */
+    public int authenticatedCount() {
+        return owners.size();
+    }
+
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     public void onSessionsRevoked(SessionsRevoked revoked) {
         owners.forEach((sessionId, owner) -> {

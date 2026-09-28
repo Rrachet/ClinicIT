@@ -1,0 +1,150 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A newer push to the same branch or PR supersedes a running build.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend (Java 21, PostgreSQL 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      # Real PostgreSQL: the queue, locking, outbox and history behaviour depends on it
+      # (row locks, SKIP LOCKED, ON CONFLICT, triggers). Never replaced by H2.
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clinicit_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    env:
+      CLINICIT_TEST_DB_URL: jdbc:postgresql://localhost:5432/clinicit_test
+      CLINICIT_TEST_DB_USERNAME: postgres
+      CLINICIT_TEST_DB_PASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Build, unit and PostgreSQL integration tests
+        run: mvn -B -ntp verify
+      - name: Every test ran (none silently skipped for lack of a database)
+        if: always()
+        run: python3 scripts/ci/check-test-reports.py target/surefire-reports
+      - name: Test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surefire-reports
+          path: target/surefire-reports
+          retention-days: 7
+
+  ml:
+    name: ML service (Python 3.11)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ml/requirements*.txt
+      - run: pip install -r requirements-dev.txt
+      # Includes retraining on the committed dataset and checking it reproduces the committed report.
+      - run: python -m pytest
+
+  frontend:
+    name: Frontend (tests, typecheck, lint, build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+
+  e2e:
+    name: Browser E2E (real stack)
+    # Only once the faster jobs pass: E2E is the slowest and its failures are hardest to read.
+    needs: [backend, ml, frontend]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: clinicit_e2e
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: ml/requirements*.txt
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - name: Install the Playwright browser
+        run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Build and run ML service, API and frontend; run Playwright
+        # Test-only credentials for a throwaway database; nothing here is a real secret.
+        env:
+          DB_URL: jdbc:postgresql://localhost:5432/clinicit_e2e
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+        run: scripts/e2e.sh
+      - name: Playwright report and server logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: frontend/test-results
+          retention-days: 7
