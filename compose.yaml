@@ -59,7 +59,8 @@ services:
       - "127.0.0.1:8080:8080"
       # 8081 (probes, metrics) stays inside the compose network.
     healthcheck:
-      test: ["CMD-SHELL", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
+      # bash (not sh): /dev/tcp is a bash feature, and the JRE image has neither curl nor wget.
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"UP\"' <&3"]
       interval: 5s
       timeout: 3s
       start_period: 30s
