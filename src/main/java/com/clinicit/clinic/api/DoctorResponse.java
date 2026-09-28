@@ -4,9 +4,10 @@ import com.clinicit.clinic.domain.DoctorProfile;
 
 import java.util.UUID;
 
-public record DoctorResponse(UUID id, UUID clinicId, String displayName, String specialization) {
+public record DoctorResponse(UUID id, UUID clinicId, String displayName, String specialization, int appointmentMinutes) {
 
     public static DoctorResponse from(DoctorProfile doctor) {
-        return new DoctorResponse(doctor.getId(), doctor.getClinicId(), doctor.getDisplayName(), doctor.getSpecialization());
+        return new DoctorResponse(doctor.getId(), doctor.getClinicId(), doctor.getDisplayName(), doctor.getSpecialization(),
+                doctor.getAppointmentMinutes());
     }
 }

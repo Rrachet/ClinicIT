@@ -60,6 +60,12 @@ public class LifecycleHistory {
                 previous, actor, at);
     }
 
+    /** A new time for a booked or confirmed appointment. Records the new time; the status is unchanged. */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void rescheduled(Appointment appointment, Actor actor, Instant at) {
+        insert(appointment, null, OperationalEventType.RESCHEDULED, appointment.getStatus(), actor, at);
+    }
+
     /** Joined the queue, or any later queue transition (the appointment mirrors the entry). */
     @Transactional(propagation = Propagation.MANDATORY)
     public void queueChanged(
@@ -87,6 +93,7 @@ public class LifecycleHistory {
                 Timestamp.from(at),
                 actor == null ? null : actor.userId(),
                 entry == null ? null : entry.getTokenNumber(),
-                type == OperationalEventType.BOOKED ? appointment.getScheduledAt() : null);
+                type == OperationalEventType.BOOKED || type == OperationalEventType.RESCHEDULED
+                        ? appointment.getScheduledAt() : null);
     }
 }

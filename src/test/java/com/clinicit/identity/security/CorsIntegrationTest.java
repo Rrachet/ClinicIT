@@ -31,6 +31,22 @@ class CorsIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void theFrontendMayUsePutAndDeleteForSchedules() throws Exception {
+        for (String method : new String[]{"PUT", "DELETE"}) {
+            mvc.perform(options("/api/v1/doctors/{id}/schedule", java.util.UUID.randomUUID())
+                            .header("Origin", FRONTEND_ORIGIN)
+                            .header("Access-Control-Request-Method", method)
+                            .header("Access-Control-Request-Headers", "authorization, content-type"))
+                    .andExpect(status().isOk())
+                    .andExpect(header().string("Access-Control-Allow-Methods", containsString(method)));
+        }
+        mvc.perform(options("/api/v1/patients")
+                        .header("Origin", FRONTEND_ORIGIN)
+                        .header("Access-Control-Request-Method", "PATCH"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void preflightFromAnUnknownOriginIsRejected() throws Exception {
         mvc.perform(options("/api/v1/patients")
                         .header("Origin", "https://evil.example")

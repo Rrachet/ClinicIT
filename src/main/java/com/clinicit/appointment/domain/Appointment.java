@@ -30,6 +30,10 @@ public class Appointment {
     @Column(nullable = false, length = 32)
     private AppointmentStatus status = AppointmentStatus.BOOKED;
 
+    /** Booked for "now" and checked in at once; never holds a slot (docs/SCHEDULING.md). */
+    @Column(name = "walk_in", nullable = false, updatable = false)
+    private boolean walkIn;
+
     @Column(name = "reason_summary", length = 500)
     private String reasonSummary;
 
@@ -56,6 +60,8 @@ public class Appointment {
     public void setClinicId(UUID clinicId) { this.clinicId = clinicId; }
     public UUID getPatientId() { return patientId; }
     public void setPatientId(UUID patientId) { this.patientId = patientId; }
+    public boolean isWalkIn() { return walkIn; }
+    public void setWalkIn(boolean walkIn) { this.walkIn = walkIn; }
     public UUID getDoctorId() { return doctorId; }
     public void setDoctorId(UUID doctorId) { this.doctorId = doctorId; }
     public LocalDateTime getScheduledAt() { return scheduledAt; }

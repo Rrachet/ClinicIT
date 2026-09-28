@@ -64,6 +64,14 @@ public class AppointmentController {
         return service.arrive(actor, id);
     }
 
+    /** Only before arrival (BOOKED or CONFIRMED), within the doctor's schedule. */
+    @PostMapping("/{id}/reschedule")
+    @FrontDesk
+    public AppointmentResponse reschedule(Actor actor, @PathVariable UUID id,
+                                          @Valid @RequestBody RescheduleAppointmentRequest request) {
+        return service.reschedule(actor, id, request.scheduledAt());
+    }
+
     @PostMapping("/{id}/no-show")
     @FrontDesk
     public AppointmentResponse noShow(Actor actor, @PathVariable UUID id) {
