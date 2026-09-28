@@ -50,10 +50,11 @@ export async function bookFromReception(
   await page.getByRole("button", { name: "Register patient" }).click();
   await page.locator(".picked").filter({ hasText: options.patientName }).waitFor();
   await page.getByRole("combobox", { name: "Doctor", exact: true }).selectOption({ label: options.doctorName });
-  if (options.time) await page.getByLabel("Time today").fill(options.time);
   const checkbox = page.getByLabel(/Patient is here now/);
   if (options.checkInNow) await checkbox.check();
   else await checkbox.uncheck();
+  // Only a later booking has a time; a walk-in is booked for "now" by the server.
+  if (options.time) await page.getByLabel("Time", { exact: true }).fill(options.time);
   await page.getByRole("button", { name: options.checkInNow ? "Book and add to queue" : "Book appointment" }).click();
 }
 

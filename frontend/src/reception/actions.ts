@@ -16,6 +16,7 @@ export type ReceptionActionKey =
   | "requeue"
   | "queue-no-show"
   | "appointment-no-show"
+  | "reschedule"
   | "cancel";
 
 export interface ReceptionAction {
@@ -29,9 +30,14 @@ export function actionsFor(appointment: Appointment, item: QueueItem | undefined
   const who = appointment.patientName ?? "this patient";
   switch (appointment.status) {
     case "BOOKED":
-      return [{ key: "confirm", label: "Confirm", primary: true }, cancel(who)];
+      return [{ key: "confirm", label: "Confirm", primary: true }, ...reschedule(appointment), cancel(who)];
     case "CONFIRMED":
-      return [{ key: "arrive", label: "Mark arrived", primary: true }, appointmentNoShow(who), cancel(who)];
+      return [
+        { key: "arrive", label: "Mark arrived", primary: true },
+        ...reschedule(appointment),
+        appointmentNoShow(who),
+        cancel(who),
+      ];
     case "ARRIVED":
       return [{ key: "join", label: "Add to queue", primary: true }, appointmentNoShow(who)];
     case "WAITING":
@@ -56,6 +62,11 @@ export function actionsFor(appointment: Appointment, item: QueueItem | undefined
     default:
       return [];
   }
+}
+
+/** Only a booked slot can move; a walk-in has none. Handled by a dialog, not {@link perform}. */
+function reschedule(appointment: Appointment): ReceptionAction[] {
+  return appointment.walkIn ? [] : [{ key: "reschedule", label: "Reschedule" }];
 }
 
 function cancel(who: string): ReceptionAction {
@@ -107,5 +118,7 @@ export async function perform(api: ClinicApi, key: ReceptionActionKey, appointme
       return api.requeue(entry());
     case "queue-no-show":
       return api.queueNoShow(entry());
+    case "reschedule":
+      throw new Error("Rescheduling needs a new time; it is done in the reschedule dialog");
   }
 }

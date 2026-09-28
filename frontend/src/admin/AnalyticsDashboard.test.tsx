@@ -54,7 +54,8 @@ const DOCTORS: DoctorAnalytics = {
     { doctorId: MEHTA.id, doctorName: "Dr. Mehta", patientsCalled: 1, patientsHandled: 1, averageWaitSeconds: 1800,
       averageConsultationSeconds: 1200, consultationSeconds: 1200, utilization: 1 },
     { doctorId: SHARMA.id, doctorName: "Dr. Sharma", patientsCalled: 3, patientsHandled: 3, averageWaitSeconds: 2500,
-      averageConsultationSeconds: 900, consultationSeconds: 2700, utilization: 2700 / 3900 },
+      averageConsultationSeconds: 900, consultationSeconds: 2700, utilization: 2700 / 3900,
+      scheduledMinutes: 420, scheduledUtilization: 2700 / (420 * 60) },
   ],
 };
 
@@ -103,8 +104,10 @@ describe("AnalyticsDashboard", () => {
     open();
     const table = await screen.findByRole("table", { name: "Doctors" });
     const sharma = within(table).getByRole("row", { name: /Dr. Sharma/ });
-    expect(sharma).toHaveTextContent("Dr. Sharma342 min15 min69%");
-    expect(within(table).getByRole("row", { name: /Dr. Mehta/ })).toHaveTextContent("100%");
+    expect(sharma).toHaveTextContent("Dr. Sharma342 min15 min69%11% of 7 h 00 min");
+    const mehta = within(table).getByRole("row", { name: /Dr. Mehta/ });
+    expect(mehta).toHaveTextContent("100%");
+    expect(mehta).toHaveTextContent("No schedule");
   });
 
   it("shows the queue now and hour by hour from the first busy hour", async () => {

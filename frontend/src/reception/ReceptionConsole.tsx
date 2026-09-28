@@ -16,6 +16,7 @@ import { AppointmentTable } from "./AppointmentTable";
 import { NewAppointmentPanel } from "./NewAppointmentPanel";
 import { NowServing } from "./NowServing";
 import { StatusLinkDialog, type LinkTarget } from "./StatusLinkDialog";
+import { RescheduleDialog } from "./RescheduleDialog";
 import { perform, type ReceptionAction } from "./actions";
 
 /** "Today's Clinic": the front desk's single working screen. */
@@ -26,6 +27,7 @@ export function ReceptionConsole() {
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [pending, setPending] = useState<{ appointment: Appointment; action: ReceptionAction } | null>(null);
   const [link, setLink] = useState<LinkTarget | null>(null);
+  const [rescheduling, setRescheduling] = useState<Appointment | null>(null);
   const [doctorFilter, setDoctorFilter] = useState<string>("all");
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -78,8 +80,11 @@ export function ReceptionConsole() {
     }
   }
 
+  const closeReschedule = useCallback(() => setRescheduling(null), []);
+
   function onAction(appointment: Appointment, action: ReceptionAction) {
-    if (action.confirm) setPending({ appointment, action });
+    if (action.key === "reschedule") setRescheduling(appointment);
+    else if (action.confirm) setPending({ appointment, action });
     else void run(appointment, action);
   }
 
@@ -183,6 +188,19 @@ export function ReceptionConsole() {
         onConfirm={() => pending && void run(pending.appointment, pending.action)}
       />
       <StatusLinkDialog api={api} link={link} onClose={() => setLink(null)} />
+      {rescheduling ? (
+        <RescheduleDialog
+          api={api}
+          clinic={clinic}
+          appointment={rescheduling}
+          onCancel={closeReschedule}
+          onDone={(moved) => {
+            setRescheduling(null);
+            setNotice(`${moved.patientName ?? "The appointment"} moved to ${moved.scheduledAt.slice(0, 10)} at ${moved.scheduledAt.slice(11, 16)}.`);
+            reloadAppointments();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
