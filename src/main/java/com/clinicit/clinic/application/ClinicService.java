@@ -1,6 +1,7 @@
 package com.clinicit.clinic.application;
 
 import com.clinicit.clinic.api.ClinicResponse;
+import com.clinicit.clinic.domain.Clinic;
 import com.clinicit.clinic.domain.ClinicRepository;
 import com.clinicit.common.domain.NotFoundException;
 import com.clinicit.identity.domain.Actor;
@@ -17,6 +18,18 @@ public class ClinicService {
     public ClinicService(ClinicRepository clinics, ClinicTime clinicTime) {
         this.clinics = clinics;
         this.clinicTime = clinicTime;
+    }
+
+    /**
+     * Renames the clinic (shown on every screen and on patients' status pages). The timezone
+     * is deliberately not editable here: it decides which day every queue belongs to, so
+     * changing it during operation would move today's queue to another date.
+     */
+    @Transactional
+    public ClinicResponse rename(Actor admin, String name) {
+        Clinic clinic = clinics.findById(admin.clinicId()).orElseThrow(() -> new NotFoundException("Clinic not found"));
+        clinic.setName(name.strip());
+        return current(admin);
     }
 
     public ClinicResponse current(Actor actor) {
