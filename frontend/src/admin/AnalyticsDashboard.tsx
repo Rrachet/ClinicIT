@@ -171,12 +171,15 @@ export function AnalyticsDashboard() {
                         {d.scheduledMinutes == null ? (
                           <span className="muted">No schedule</span>
                         ) : (
-                          <span className="bar-cell">
-                            <span className="bar" aria-hidden>
-                              <span className="bar-fill" style={{ width: `${barPercent(d.scheduledUtilization ?? null, 1)}%` }} />
+                          <>
+                            <span className="bar-cell">
+                              <span className="bar" aria-hidden>
+                                <span className="bar-fill" style={{ width: `${barPercent(d.scheduledUtilization ?? null, 1)}%` }} />
+                              </span>
+                              {percent(d.scheduledUtilization ?? null)}
                             </span>
-                            {percent(d.scheduledUtilization ?? null)} of {duration(d.scheduledMinutes * 60)}
-                          </span>
+                            <span className="muted small block"> of {duration(d.scheduledMinutes * 60)}</span>
+                          </>
                         )}
                       </td>
                     </tr>
