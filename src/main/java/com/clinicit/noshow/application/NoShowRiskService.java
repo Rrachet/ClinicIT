@@ -19,10 +19,12 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 /**
  * Advisory no-show flags ({@link NoShowRiskRule}) and their evaluation on the clinic's own
@@ -37,6 +39,9 @@ import java.util.UUID;
  * <p>An appointment is <i>kept</i> when the patient arrived, and <i>missed</i> when it was
  * marked no-show without the patient ever arriving. Walk-ins are left out (they are here by
  * definition), and so are cancellations and appointments without an outcome yet.
+ *
+ * <p>Each appointment's outcome times are read once from the history; the as-of rules are
+ * then applied in memory by the same code for the front desk and for the evaluation.
  */
 @Service
 @Transactional(readOnly = true)
@@ -46,15 +51,30 @@ public class NoShowRiskService {
     static final int MAX_EVALUATION_DAYS = 366;
     static final int CLINIC_RATE_DAYS = 180;
 
-    /** Kept / missed flags of an appointment {@code p} as of {@code :asOf}. */
-    private static final String OUTCOME_AS_OF = """
-            exists (select 1 from operational_events e
-                    where e.appointment_id = p.id and e.clinic_id = p.clinic_id
-                      and e.event_type = 'ARRIVED' and e.occurred_at < :asOf)                           as kept,
-            exists (select 1 from operational_events e
-                    where e.appointment_id = p.id and e.clinic_id = p.clinic_id
-                      and e.event_type = 'NO_SHOW' and e.previous_status = 'CONFIRMED'
-                      and e.occurred_at < :asOf)                                                        as missed
+    /** One booked (not walk-in) appointment and when its outcome was recorded, if it was. */
+    record Outcome(UUID id, UUID patientId, LocalDateTime scheduledAt, Instant arrivedAt, Instant missedAt) {
+        boolean keptBy(Instant moment) {
+            return arrivedAt != null && arrivedAt.isBefore(moment);
+        }
+
+        boolean missedBy(Instant moment) {
+            return missedAt != null && missedAt.isBefore(moment);
+        }
+
+        boolean knownBy(Instant moment) {
+            return keptBy(moment) || missedBy(moment);
+        }
+    }
+
+    private static final String OUTCOMES = """
+            select a.id, a.patient_id, a.scheduled_at,
+                   min(e.occurred_at) filter (where e.event_type = 'ARRIVED')                                   as arrived_at,
+                   min(e.occurred_at) filter (where e.event_type = 'NO_SHOW' and e.previous_status = 'CONFIRMED') as missed_at
+            from appointments a
+            left join operational_events e
+                   on e.appointment_id = a.id and e.clinic_id = a.clinic_id and e.event_type in ('ARRIVED', 'NO_SHOW')
+            where a.clinic_id = :clinic and not a.walk_in and a.scheduled_at < :before %s
+            group by a.id, a.patient_id, a.scheduled_at
             """;
 
     private final NamedParameterJdbcTemplate jdbc;
@@ -69,21 +89,29 @@ public class NoShowRiskService {
     public List<NoShowRiskResponse> forDay(Actor actor, LocalDate requestedDate) {
         UUID clinicId = actor.clinicId();
         LocalDate date = requestedDate != null ? requestedDate : clinicTime.today(clinicId);
-        List<UUID> targets = jdbc.queryForList("""
-                select id from appointments
+        Map<UUID, UUID> targets = new java.util.LinkedHashMap<>();
+        jdbc.query("""
+                select id, patient_id from appointments
                 where clinic_id = :clinic and scheduled_at >= :from and scheduled_at < :to
                   and status in ('BOOKED', 'CONFIRMED') and not walk_in
+                order by scheduled_at, id
                 """, new MapSqlParameterSource("clinic", clinicId)
                         .addValue("from", date.atStartOfDay()).addValue("to", date.plusDays(1).atStartOfDay()),
-                UUID.class);
+                rs -> {
+                    targets.put(rs.getObject("id", UUID.class), rs.getObject("patient_id", UUID.class));
+                });
+        if (targets.isEmpty()) return List.of();
+
         Instant now = clinicTime.instant();
         LocalDateTime localNow = clinicTime.now(clinicId);
-        Double clinicRate = clinicMissRate(clinicId, now, localNow);
-        Map<UUID, int[]> history = priorHistory(clinicId, targets, now, localNow);
-        return targets.stream().map(id -> {
-            int[] counts = history.getOrDefault(id, new int[2]);
-            return NoShowRiskResponse.of(id, NoShowRiskRule.assess(counts[0], counts[1], clinicRate));
-        }).toList();
+        Double clinicRate = clinicMissRate(
+                outcomes(clinicId, localNow, localNow.minusDays(CLINIC_RATE_DAYS), null), now, localNow);
+        Map<UUID, List<Outcome>> byPatient = byPatient(outcomes(clinicId, localNow, null, targets.values()));
+
+        return targets.entrySet().stream()
+                .map(target -> NoShowRiskResponse.of(target.getKey(),
+                        assess(target.getKey(), byPatient.get(target.getValue()), now, localNow, clinicRate)))
+                .toList();
     }
 
     /**
@@ -100,32 +128,31 @@ public class NoShowRiskService {
             throw new InvalidRequestException("The range can be at most " + MAX_EVALUATION_DAYS + " days");
         }
 
+        // Every booked appointment up to the end of the range: the history each day may look back on.
+        List<Outcome> all = outcomes(clinicId, to.plusDays(1).atStartOfDay(), null, null);
+        Map<UUID, List<Outcome>> byPatient = byPatient(all);
+        Map<LocalDate, List<Outcome>> byDay = all.stream()
+                .filter(o -> !o.scheduledAt().toLocalDate().isBefore(from))
+                .collect(Collectors.groupingBy(o -> o.scheduledAt().toLocalDate()));
+
         long judged = 0, unknown = 0, missed = 0, flagged = 0, flaggedMissed = 0, typical = 0, typicalMissed = 0;
         for (LocalDate day = from; !day.isAfter(to); day = day.plusDays(1)) {
-            // Appointments of the day whose outcome is known by now: this is the label, not an input.
-            Map<UUID, Boolean> outcomes = new HashMap<>();
-            jdbc.query("""
-                    select p.id, %s
-                    from appointments p
-                    where p.clinic_id = :clinic and p.scheduled_at >= :from and p.scheduled_at < :to and not p.walk_in
-                    """.formatted(OUTCOME_AS_OF), new MapSqlParameterSource("clinic", clinicId)
-                            .addValue("from", day.atStartOfDay()).addValue("to", day.plusDays(1).atStartOfDay())
-                            .addValue("asOf", Timestamp.from(clinicTime.instant())),
-                    rs -> {
-                        if (rs.getBoolean("missed")) outcomes.put(rs.getObject("id", UUID.class), true);
-                        else if (rs.getBoolean("kept")) outcomes.put(rs.getObject("id", UUID.class), false);
-                    });
-            if (outcomes.isEmpty()) continue;
+            // Appointments of the day whose outcome is known today: the label, never an input.
+            List<Outcome> labelled = byDay.getOrDefault(day, List.of()).stream()
+                    .filter(o -> o.missedAt() != null || o.arrivedAt() != null)
+                    .toList();
+            if (labelled.isEmpty()) continue;
 
             // Judged with what was known at the start of that day.
             Instant asOf = day.atStartOfDay(zone).toInstant();
             LocalDateTime asOfLocal = day.atStartOfDay();
-            Double clinicRate = clinicMissRate(clinicId, asOf, asOfLocal);
-            Map<UUID, int[]> history = priorHistory(clinicId, new ArrayList<>(outcomes.keySet()), asOf, asOfLocal);
-            for (Map.Entry<UUID, Boolean> outcome : outcomes.entrySet()) {
-                int[] counts = history.getOrDefault(outcome.getKey(), new int[2]);
-                NoShowRisk risk = NoShowRiskRule.assess(counts[0], counts[1], clinicRate);
-                boolean wasMissed = outcome.getValue();
+            LocalDateTime rateSince = asOfLocal.minusDays(CLINIC_RATE_DAYS);
+            Double clinicRate = clinicMissRate(all.stream()
+                    .filter(o -> !o.scheduledAt().isBefore(rateSince) && o.scheduledAt().isBefore(asOfLocal))
+                    .toList(), asOf, asOfLocal);
+            for (Outcome target : labelled) {
+                NoShowRisk risk = assess(target.id(), byPatient.get(target.patientId()), asOf, asOfLocal, clinicRate);
+                boolean wasMissed = target.missedAt() != null;
                 if (wasMissed) missed++;
                 switch (risk.level()) {
                     case UNKNOWN -> unknown++;
@@ -146,54 +173,56 @@ public class NoShowRiskService {
                 typical, typicalMissed);
     }
 
-    /** The clinic's never-arrived rate over the 180 days before the moment, or null without data. */
-    private Double clinicMissRate(UUID clinicId, Instant asOf, LocalDateTime asOfLocal) {
-        Map<String, Object> row = jdbc.queryForMap("""
-                select count(*) filter (where missed) as missed, count(*) filter (where kept or missed) as known
-                from (
-                    select %s
-                    from appointments p
-                    where p.clinic_id = :clinic and not p.walk_in and p.scheduled_at >= :since and p.scheduled_at < :asOfLocal
-                ) outcomes
-                """.formatted(OUTCOME_AS_OF), new MapSqlParameterSource("clinic", clinicId)
-                        .addValue("since", asOfLocal.minusDays(CLINIC_RATE_DAYS))
-                        .addValue("asOfLocal", asOfLocal)
-                        .addValue("asOf", Timestamp.from(asOf)));
-        long known = ((Number) row.get("known")).longValue();
-        return known == 0 ? null : ((Number) row.get("missed")).doubleValue() / known;
+    /**
+     * The rule for one appointment: the patient's last 10 earlier appointments whose outcome
+     * was known at the moment (the appointment itself never counts).
+     */
+    private static NoShowRisk assess(UUID target, List<Outcome> patientHistory, Instant asOf, LocalDateTime asOfLocal,
+                                     Double clinicRate) {
+        List<Outcome> prior = (patientHistory == null ? List.<Outcome>of() : patientHistory).stream()
+                .filter(o -> !o.id().equals(target) && o.scheduledAt().isBefore(asOfLocal) && o.knownBy(asOf))
+                .sorted(Comparator.comparing(Outcome::scheduledAt).reversed())
+                .limit(NoShowRiskRule.HISTORY_WINDOW)
+                .toList();
+        int missed = (int) prior.stream().filter(o -> o.missedBy(asOf)).count();
+        return NoShowRiskRule.assess(prior.size(), missed, clinicRate);
     }
 
-    /**
-     * For each target appointment: {known outcomes, missed} over the patient's last 10 earlier
-     * appointments with an outcome known at the moment (the target itself never counts).
-     */
-    private Map<UUID, int[]> priorHistory(UUID clinicId, List<UUID> targets, Instant asOf, LocalDateTime asOfLocal) {
-        Map<UUID, int[]> result = new HashMap<>();
-        if (targets.isEmpty()) return result;
-        jdbc.query("""
-                select t.id,
-                       count(*) filter (where h.kept or h.missed)   as known,
-                       count(*) filter (where h.missed)             as missed
-                from appointments t
-                left join lateral (
-                    select kept, missed from (
-                        select p.scheduled_at, %s
-                        from appointments p
-                        where p.clinic_id = t.clinic_id and p.patient_id = t.patient_id and p.id <> t.id
-                          and not p.walk_in and p.scheduled_at < :asOfLocal
-                    ) prior
-                    where kept or missed
-                    order by scheduled_at desc
-                    limit %d
-                ) h on true
-                where t.clinic_id = :clinic and t.id in (:targets)
-                group by t.id
-                """.formatted(OUTCOME_AS_OF, NoShowRiskRule.HISTORY_WINDOW),
-                new MapSqlParameterSource("clinic", clinicId).addValue("targets", targets)
-                        .addValue("asOf", Timestamp.from(asOf)).addValue("asOfLocal", asOfLocal),
-                rs -> {
-                    result.put(rs.getObject("id", UUID.class), new int[]{rs.getInt("known"), rs.getInt("missed")});
-                });
-        return result;
+    /** Never-arrived rate among the given appointments' outcomes known at the moment; null without any. */
+    private static Double clinicMissRate(List<Outcome> window, Instant asOf, LocalDateTime asOfLocal) {
+        long known = 0, missed = 0;
+        for (Outcome o : window) {
+            if (!o.scheduledAt().isBefore(asOfLocal) || !o.knownBy(asOf)) continue;
+            known++;
+            if (o.missedBy(asOf)) missed++;
+        }
+        return known == 0 ? null : (double) missed / known;
+    }
+
+    private List<Outcome> outcomes(UUID clinicId, LocalDateTime before, LocalDateTime since, Collection<UUID> patients) {
+        MapSqlParameterSource params = new MapSqlParameterSource("clinic", clinicId).addValue("before", before);
+        List<String> filters = new ArrayList<>();
+        if (since != null) {
+            filters.add("and a.scheduled_at >= :since");
+            params.addValue("since", since);
+        }
+        if (patients != null) {
+            filters.add("and a.patient_id in (:patients)");
+            params.addValue("patients", patients);
+        }
+        return jdbc.query(OUTCOMES.formatted(String.join(" ", filters)), params, (rs, i) -> new Outcome(
+                rs.getObject("id", UUID.class),
+                rs.getObject("patient_id", UUID.class),
+                rs.getObject("scheduled_at", LocalDateTime.class),
+                instant(rs.getTimestamp("arrived_at")),
+                instant(rs.getTimestamp("missed_at"))));
+    }
+
+    private static Map<UUID, List<Outcome>> byPatient(List<Outcome> outcomes) {
+        return outcomes.stream().collect(Collectors.groupingBy(Outcome::patientId));
+    }
+
+    private static Instant instant(Timestamp timestamp) {
+        return timestamp == null ? null : timestamp.toInstant();
     }
 }
