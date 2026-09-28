@@ -18,6 +18,17 @@ describe("createApiClient", () => {
     expect(init.body).toBe(JSON.stringify({ fullName: "A" }));
   });
 
+  it("refuses to send anything when no API is configured, instead of calling this site", async () => {
+    const fetchImpl = vi.fn(async () => jsonResponse(200, {}));
+    const client = createApiClient({ baseUrl: "", getToken: () => "abc", fetchImpl });
+
+    const error = await client.get("/api/v1/clinic").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiError);
+    expect(error).toMatchObject({ status: 0, code: "API_NOT_CONFIGURED" });
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
   it("sends no token for anonymous requests or when signed out", async () => {
     const fetchImpl = vi.fn(async () => jsonResponse(200, {}));
     await createApiClient({ baseUrl: "http://api.test", getToken: () => "abc", fetchImpl }).get("/x", { anonymous: true });

@@ -73,9 +73,14 @@ the platform's secret settings; **never commit them**.
 
 ## 5. Web app on Vercel
 
-1. Import the repository and set **Root Directory** to `frontend`. The Next.js preset builds it.
+1. Import the repository and set **Root Directory** to `frontend` and **Framework Preset** to Next.js (Node.js 22).
+   No `vercel.json` is needed: the preset runs `npm ci` and `next build`. Git pushes to `main` deploy to production.
 2. Set `NEXT_PUBLIC_API_BASE_URL` to the API's public HTTPS URL, e.g. `https://api.clinic.example.com`. It is
    compiled into the browser code and into the Content-Security-Policy, so **redeploy after changing it**.
+   - The WebSocket URL is derived from it (`https://…` → `wss://…/ws`); there is no separate variable.
+   - Without it, a production build has no API: the sign-in page says the site is not connected to a server and
+     nothing calls localhost.
+   - A Vercel production build with a plain `http://` API URL fails on purpose: browsers block it from an HTTPS page.
 3. Add your domain, then make sure the API's `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL` are that
    exact origin.
 
@@ -98,6 +103,7 @@ the platform's secret settings; **never commit them**.
 | Symptom | Cause |
 |---|---|
 | API exits at start with "Production configuration is not safe to start" | a missing or unsafe setting; the message lists all of them |
+| Sign-in page says "not connected to a ClinicIT server yet" | `NEXT_PUBLIC_API_BASE_URL` was not set for that build; set it and redeploy |
 | Browser shows "Cannot reach the ClinicIT server" | `NEXT_PUBLIC_API_BASE_URL` wrong, or the API's CORS origin does not match the web app's exact origin |
 | Reception shows "Reconnecting…" forever | WebSockets blocked by a proxy, or the API URL is not HTTPS/WSS |
 | Readiness 503 | the API cannot reach PostgreSQL (URL, TLS mode, credentials, network) |

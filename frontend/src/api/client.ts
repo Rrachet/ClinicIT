@@ -47,6 +47,7 @@ export function createApiClient(options: ApiClientOptions) {
   const base = options.baseUrl.replace(/\/$/, "");
 
   async function request<T>(method: string, path: string, opts: RequestOptions = {}): Promise<T> {
+    if (!base) throw new ApiError(0, "API_NOT_CONFIGURED", "This site is not connected to a ClinicIT server yet.");
     const url = new URL(base + path);
     for (const [key, value] of Object.entries(opts.query ?? {})) {
       if (value !== undefined && value !== "") url.searchParams.set(key, value);

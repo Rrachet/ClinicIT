@@ -3,12 +3,13 @@
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/api/client";
+import { API_CONFIGURED } from "@/api/config";
 import { Button } from "@/ui/Button";
 import { ErrorBanner, Notice } from "@/ui/Feedback";
 import { useAuth } from "./AuthProvider";
 import { homeFor } from "./routing";
 
-export function LoginScreen() {
+export function LoginScreen({ apiConfigured = API_CONFIGURED }: { apiConfigured?: boolean }) {
   const { login, session } = useAuth();
   const router = useRouter();
   const [email, setEmail] = useState("");
@@ -49,6 +50,9 @@ export function LoginScreen() {
         {reason === "password-changed" ? (
           <Notice>Password changed. You were signed out everywhere; sign in with your new password.</Notice>
         ) : null}
+        {apiConfigured ? null : (
+          <Notice>This site is not connected to a ClinicIT server yet, so signing in is not possible.</Notice>
+        )}
         <ErrorBanner error={error} />
         <label className="field">
           <span>Email</span>
@@ -64,7 +68,7 @@ export function LoginScreen() {
             required
           />
         </label>
-        <Button type="submit" variant="primary" size="lg" busy={busy}>
+        <Button type="submit" variant="primary" size="lg" busy={busy} disabled={!apiConfigured}>
           Sign in
         </Button>
       </form>

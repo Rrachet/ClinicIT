@@ -59,6 +59,12 @@ describe("authentication", () => {
     expect(loadSession()).toBeNull();
   });
 
+  it("says so, and cannot submit, when the site has no API configured", () => {
+    renderWithAuth(<LoginScreen apiConfigured={false} />);
+    expect(screen.getByText(/not connected to a ClinicIT server yet/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Sign in" })).toBeDisabled();
+  });
+
   it("explains an expired session", () => {
     searchParams.value = new URLSearchParams("reason=expired");
     renderWithAuth(<LoginScreen />);
