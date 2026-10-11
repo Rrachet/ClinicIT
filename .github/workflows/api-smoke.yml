@@ -1,0 +1,41 @@
+name: Deployed API smoke check
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: Public HTTPS Koyeb API base URL (for example https://clinicit-api-org.koyeb.app)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    name: Check deployed API health
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Validate API URL
+        env:
+          API_URL: ${{ inputs.api_url }}
+        run: |
+          node <<'NODE'
+          const raw = (process.env.API_URL || '').trim().replace(/\/$/, '');
+          let url;
+          try { url = new URL(raw); } catch { throw new Error('api_url must be a valid URL'); }
+          if (url.protocol !== 'https:') throw new Error('api_url must use HTTPS');
+          if (!url.hostname.endsWith('.koyeb.app')) throw new Error('api_url must be a Koyeb hostname');
+          if (url.username || url.password || url.search || url.hash) throw new Error('api_url must not include credentials, query, or fragment');
+          process.env.API_URL = raw;
+          require('node:fs').writeFileSync('/tmp/clinic-api-url', raw);
+          NODE
+
+      - name: Check public health endpoint
+        run: |
+          API_URL="$(cat /tmp/clinic-api-url)"
+          code="$(curl --silent --show-error --max-time 20 --output /tmp/health.json --write-out '%{http_code}' "$API_URL/api/v1/health")"
+          echo "HTTP status: $code"
+          cat /tmp/health.json
+          test "$code" = "200"
