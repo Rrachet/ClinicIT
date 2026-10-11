@@ -36,9 +36,9 @@ existing branch is unavailable. Retrieve its connection details from Neon and ke
 - `DB_URL` must be a JDBC URL: `jdbc:postgresql://HOST/DB?sslmode=require` (preserve any required Neon TLS
   parameters supported by the driver).
 - `DB_USERNAME` and `DB_PASSWORD` are the role credentials for that connection.
-- Do not paste the full connection string into a public issue, README or commit.
-3. Keep `DB_POOL_SIZE` (default 10) well inside the plan's connection limit.
-4. **Backups:** turn on automated backups and point-in-time recovery on the platform. ClinicIT does not do backups.
+- Keep `DB_POOL_SIZE` (default 10) within Neon connection limits.
+- Review the recovery/history retention included with the current Neon plan before using any non-demo data. ClinicIT
+  does not create database backups. This free-first deployment is for evaluation with fictional data only.
 
 Flyway creates the schema on the API's first start. Hibernate never changes it.
 
@@ -51,9 +51,6 @@ Flyway creates the schema on the API's first start. Hibernate never changes it.
    Do not expose 8081. Set the maximum scale to one instance; do not enable autoscaling.
 4. Set the environment variables below in Koyeb's service settings. Use the platform's secret inputs for credentials.
    Do not put connection strings, passwords or bootstrap credentials in GitHub.
-   
-Create the service from the repository's root `Dockerfile` and set these environment variables. They come from
-the platform's secret settings; **never commit them**.
 
 | Variable | Value |
 |---|---|
@@ -115,7 +112,7 @@ the platform's secret settings; **never commit them**.
    - [ ] the reception screen shows **Live** (WebSocket connected through the platform);
    - [ ] a test walk-in's status link opens on a phone, over HTTPS, and updates when called;
    - [ ] `GET https://api…/actuator/prometheus` is **not** reachable from the internet;
-   - [ ] backups are on, and a restore has been tried once.
+   - [ ] Neon recovery/history options have been reviewed and a restore process tested before any real data is considered.
 
 ## When it fails clearly
 
