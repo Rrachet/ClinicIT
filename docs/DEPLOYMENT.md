@@ -1,47 +1,64 @@
 # Deploying ClinicIT
 
-One way to run ClinicIT for a real clinic on managed services:
-- the web app on **Vercel**;
-- the API (and optionally the wait-time ML service) on **Render** or **Railway**;
-- **managed PostgreSQL 16**.
+The selected free-first deployment target is:
+- **Frontend:** Vercel (`frontend/`, already deployed)
+- **API:** Koyeb Web Service built from the repository-root `Dockerfile`
+- **Database:** the existing Neon PostgreSQL project/production branch
+- **ML:** omitted initially; the deterministic wait-time fallback is built in
 
-Any platform that runs a Docker image, supports WebSockets and gives you PostgreSQL works the same way. What the
-application needs and checks is in [OPERATIONS.md](OPERATIONS.md). This page is the path through it.
+Koyeb documents one free Web Service per organization (512 MB RAM, 0.1 vCPU, 2 GB SSD); it sleeps after one hour
+without traffic. Koyeb may require a payment method during account validation, so do not proceed with any paid plan or
+add a card if that conflicts with your free-first constraint. The free instance is intended for preview/hobby use, not
+a production clinic with real patient data. See the [Koyeb pricing FAQ](https://www.koyeb.com/docs/faqs/pricing)
+and [instance limits](https://www.koyeb.com/docs/reference/instances).
 
-> Not verified here: these steps follow each platform's documented model (Docker services, environment variables,
-> private networking, managed PostgreSQL), but no ClinicIT deployment was made to them from this repository. The
-> images themselves are built and started in CI on every pull request (`docker compose` smoke test).
+The repository's root Dockerfile and production configuration are ready for a container-based API deployment. The
+full hosted stack is **not yet deployed or verified**; CI's Docker Compose smoke test is a local-stack check, not proof
+of a public deployment. The requirements and safeguards are in [OPERATIONS.md](OPERATIONS.md).
 
 ## 1. What to deploy
 
 | Piece | Source | Where | Public? |
 |---|---|---|---|
-| PostgreSQL 16 | managed database | Render / Railway / Neon / RDS / Cloud SQL | no |
-| API | `Dockerfile` (repo root) | Render or Railway web service | yes: HTTPS and WebSockets on `PORT` |
+| PostgreSQL 16 | existing managed database | Neon production branch | no |
+| API | `Dockerfile` (repo root) | Koyeb Web Service, one free instance | yes: HTTPS and WebSockets on `PORT` |
 | ML service (optional) | `ml/Dockerfile` | private service, same platform as the API | **no**: it has no authentication |
 | Web app | `frontend/` | Vercel | yes |
 
 **Run exactly one API instance.** The real-time queue uses an in-memory broker, so a second instance would miss
 live updates ([OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary)). Do not enable autoscaling.
 
-## 2. Database
+## 2. Database (existing Neon production branch)
 
-1. Create a PostgreSQL **16** database and a dedicated user for ClinicIT. Keep the admin user for yourself.
-2. Note the JDBC URL. Most managed services require TLS: `jdbc:postgresql://HOST:5432/DB?sslmode=require`.
+Use the existing Neon project `tiny-bonus-47281441`, branch `production`. Do not create a second database unless the
+existing branch is unavailable. Retrieve its connection details from Neon and keep them private.
+
+- `DB_URL` must be a JDBC URL: `jdbc:postgresql://HOST/DB?sslmode=require` (preserve any required Neon TLS
+  parameters supported by the driver).
+- `DB_USERNAME` and `DB_PASSWORD` are the role credentials for that connection.
+- Do not paste the full connection string into a public issue, README or commit.
 3. Keep `DB_POOL_SIZE` (default 10) well inside the plan's connection limit.
 4. **Backups:** turn on automated backups and point-in-time recovery on the platform. ClinicIT does not do backups.
 
 Flyway creates the schema on the API's first start. Hibernate never changes it.
 
-## 3. API
+## 3. API on Koyeb
 
-Create a web service from the repository's root `Dockerfile` and set these environment variables. They come from
+1. Open the [Koyeb control panel](https://app.koyeb.com/) and create a Web Service from the GitHub repository
+   `Rrachet/ClinicIT`, branch `main`. Authorize Koyeb to access this repository if prompted.
+2. Select **Dockerfile** as the builder and leave the Dockerfile path at the repository root (`Dockerfile`).
+3. Select the `free` instance if available and a supported free region. Expose **8080 / HTTP** at route `/`.
+   Do not expose 8081. Set the maximum scale to one instance; do not enable autoscaling.
+4. Set the environment variables below in Koyeb's service settings. Use the platform's secret inputs for credentials.
+   Do not put connection strings, passwords or bootstrap credentials in GitHub.
+   
+Create the service from the repository's root `Dockerfile` and set these environment variables. They come from
 the platform's secret settings; **never commit them**.
 
 | Variable | Value |
 |---|---|
 | `SPRING_PROFILES_ACTIVE` | `prod` |
-| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | from step 2 (a development password is refused) |
+| `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | from the existing Neon production branch (a development password is refused) |
 | `CLINICIT_CORS_ALLOWED_ORIGINS` | the web app's exact origin, e.g. `https://clinic.example.com` (https, no wildcards) |
 | `CLINICIT_PUBLIC_APP_URL` | the same origin: patients' status links are `{this}/status/{code}` |
 | `CLINICIT_NOTIFICATIONS_ENABLED` / `CLINICIT_NOTIFICATIONS_PROVIDER` | `false` / `none` (no real SMS provider ships yet) |
@@ -61,7 +78,8 @@ the platform's secret settings; **never commit them**.
   sign in with a wrong password from your own machine. The login throttling's per-address counter must see your
   address, not the platform's proxy. If it sees the proxy, set `server.tomcat.remoteip.internal-proxies` to the
   platform's documented proxy range.
-- **WebSockets.** Render and Railway web services support them. Nothing extra is needed.
+- **WebSockets.** Koyeb Web Services support HTTP and WebSocket traffic. Expose only port 8080 publicly; keep
+  management port 8081 private. Configure one instance only because the queue's live broker is in memory.
 
 ## 4. ML service (optional)
 
@@ -73,9 +91,10 @@ the platform's secret settings; **never commit them**.
 
 ## 5. Web app on Vercel
 
-1. Import the repository and set **Root Directory** to `frontend` and **Framework Preset** to Next.js (Node.js 22).
-   No `vercel.json` is needed: the preset runs `npm ci` and `next build`. Git pushes to `main` deploy to production.
-2. Set `NEXT_PUBLIC_API_BASE_URL` to the API's public HTTPS URL, e.g. `https://api.clinic.example.com`. It is
+1. The existing Vercel project is `clinic-it`; its Root Directory should be `frontend` and Framework Preset Next.js
+   (Node.js 22). Git pushes to `main` deploy to production.
+2. After Koyeb creates the API's actual public HTTPS hostname, set `NEXT_PUBLIC_API_BASE_URL` in the Vercel
+   project's Production and Preview environments to that exact URL. Do not use a guessed hostname. It is
    compiled into the browser code and into the Content-Security-Policy, so **redeploy after changing it**.
    - The WebSocket URL is derived from it (`https://…` → `wss://…/ws`); there is no separate variable.
    - Without it, a production build has no API: the sign-in page says the site is not connected to a server and
