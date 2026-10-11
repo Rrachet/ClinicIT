@@ -155,6 +155,13 @@ Guides:
 | [Frontend](docs/FRONTEND.md), [Demo clinic](docs/DEMO.md) | the screens and the demo data |
 | [Operations](docs/OPERATIONS.md), [Deployment](docs/DEPLOYMENT.md), [Testing](docs/TESTING.md), [Review](docs/REVIEW.md) | running it, testing it, and an honest assessment |
 
+
+## Deployment status
+
+The Vercel frontend preview is available at https://clinic-it-kappa.vercel.app, but it is **not yet a complete hosted clinic system**: a public Spring Boot API and production database are not connected. Sign-in and API-backed workflows should be evaluated using the local Docker Compose stack above until the backend is deployed and the frontend API URL is configured. Do not enter real patient data into the preview.
+
+The deployment checklist and environment requirements are documented in [Deployment](docs/DEPLOYMENT.md). Production readiness also depends on completing the roadmap items below, including a real messaging provider and a multi-instance realtime strategy.
+
 ## What's built
 
 | Phase | |
