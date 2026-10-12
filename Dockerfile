@@ -16,4 +16,4 @@ COPY --from=build /src/clinicit.jar /app/clinicit.jar
 USER clinicit
 # 8080: public API. 8081: health probes and metrics, for the orchestrator only.
 EXPOSE 8080 8081
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75", "-jar", "/app/clinicit.jar"]
+ENTRYPOINT ["java", "-XX:MaxRAMPercentage=55", "-jar", "/app/clinicit.jar"]
