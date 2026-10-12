@@ -140,7 +140,7 @@ Deploy with `SPRING_PROFILES_ACTIVE=prod`:
 - **Instances:** run one API instance; the in-memory WebSocket broker is the documented scaling boundary.
 
 Guides:
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel + Render/Railway + managed PostgreSQL.
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel + Koyeb + Neon (free-first preview deployment).
 - [docs/OPERATIONS.md](docs/OPERATIONS.md): configuration, probes, metrics and logging.
 
 ## Documentation
