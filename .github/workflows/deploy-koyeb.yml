@@ -1,0 +1,160 @@
+name: Bootstrap ClinicIT API on Koyeb
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: clinicit-koyeb-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy Spring Boot API
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      KOYEB_API_TOKEN: ${{ secrets.KOYEB_API_TOKEN }}
+      DB_PASSWORD: ${{ secrets.CLINICIT_DB_PASSWORD }}
+      BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.CLINICIT_BOOTSTRAP_ADMIN_EMAIL }}
+      BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLINICIT_BOOTSTRAP_ADMIN_PASSWORD }}
+      API_APP_URL: https://clinic-it-kappa.vercel.app
+      DB_URL: jdbc:postgresql://ep-silent-dawn-b4qphwvl.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require
+    steps:
+      - name: Validate required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in KOYEB_API_TOKEN DB_PASSWORD BOOTSTRAP_ADMIN_EMAIL BOOTSTRAP_ADMIN_PASSWORD; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::Missing GitHub Actions secret for $name. See docs/DEPLOYMENT.md."
+              exit 1
+            fi
+          done
+          if [[ "$BOOTSTRAP_ADMIN_PASSWORD" == *" "* || ${#BOOTSTRAP_ADMIN_PASSWORD} -lt 16 ]]; then
+            echo "::error::CLINICIT_BOOTSTRAP_ADMIN_PASSWORD must be at least 16 characters and contain no spaces."
+            exit 1
+          fi
+          if [[ "$BOOTSTRAP_ADMIN_EMAIL" != *@*.* ]]; then
+            echo "::error::CLINICIT_BOOTSTRAP_ADMIN_EMAIL must be a valid email address."
+            exit 1
+          fi
+
+      - name: Install Koyeb CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/koyeb/koyeb-cli/master/install.sh | sh
+          echo "$HOME/.koyeb/bin" >> "$GITHUB_PATH"
+
+      - name: Create or update the Koyeb service
+        shell: bash
+        run: |
+          set -euo pipefail
+          CLI=(koyeb --token "$KOYEB_API_TOKEN" --output json)
+          COMMON=(
+            --git github.com/Rrachet/ClinicIT
+            --git-branch main
+            --git-builder docker
+            --git-docker-dockerfile Dockerfile
+            --instance-type free
+            --min-scale 0
+            --max-scale 1
+            --regions was
+            --ports 8080:http
+            --routes /:8080
+            --checks 8080:http:/api/v1/health
+            --checks-grace-period 8080=180
+            --env SPRING_PROFILES_ACTIVE=prod
+            --env "DB_URL=$DB_URL"
+            --env DB_USERNAME=neondb_owner
+            --env "DB_PASSWORD=$DB_PASSWORD"
+            --env "CLINICIT_CORS_ALLOWED_ORIGINS=$API_APP_URL"
+            --env "CLINICIT_PUBLIC_APP_URL=$API_APP_URL"
+            --env CLINICIT_NOTIFICATIONS_ENABLED=false
+            --env CLINICIT_NOTIFICATIONS_PROVIDER=none
+            --env "CLINICIT_BOOTSTRAP_CLINIC_NAME=ClinicIT Demo Clinic"
+            --env CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE=Asia/Kolkata
+            --env "CLINICIT_BOOTSTRAP_ADMIN_EMAIL=$BOOTSTRAP_ADMIN_EMAIL"
+            --env "CLINICIT_BOOTSTRAP_ADMIN_PASSWORD=$BOOTSTRAP_ADMIN_PASSWORD"
+            --wait
+            --wait-timeout 20m
+          )
+          if "${CLI[@]}" apps get clinicit >/dev/null 2>&1; then
+            echo "Koyeb app exists; updating its clinicit service."
+            if "${CLI[@]}" services get clinicit --app clinicit >/dev/null 2>&1; then
+              "${CLI[@]}" services update clinicit --app clinicit "${COMMON[@]}"
+            else
+              "${CLI[@]}" services create clinicit --app clinicit "${COMMON[@]}"
+            fi
+          else
+            "${CLI[@]}" apps init clinicit "${COMMON[@]}"
+          fi
+
+      - name: Resolve API hostname
+        id: api
+        shell: bash
+        run: |
+          set -euo pipefail
+          koyeb --token "$KOYEB_API_TOKEN" --output json services get clinicit --app clinicit > /tmp/koyeb-service.json
+          HOST="$(jq -r '[.. | strings | select(test("^[a-z0-9-]+\\.koyeb\\.app$"))][0] // empty' /tmp/koyeb-service.json)"
+          if [[ -z "$HOST" ]]; then
+            echo "::error::Koyeb did not return a public *.koyeb.app hostname. Open the service in Koyeb and inspect its Domains section."
+            cat /tmp/koyeb-service.json
+            exit 1
+          fi
+          echo "url=https://$HOST" >> "$GITHUB_OUTPUT"
+          echo "API URL: https://$HOST"
+
+      - name: Verify API health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl --silent --show-error --max-time 15 --output /tmp/health.json --write-out '%{http_code}' "${{ steps.api.outputs.url }}/api/v1/health" || true)"
+            if [[ "$code" == "200" ]]; then
+              echo "API health check passed."
+              cat /tmp/health.json
+              exit 0
+            fi
+            echo "Health check attempt $attempt/30 returned ${code:-no response}; waiting 10 seconds."
+            sleep 10
+          done
+          echo "::error::The deployed API did not return HTTP 200. Inspect Koyeb runtime/build logs before retrying."
+          cat /tmp/health.json 2>/dev/null || true
+          exit 1
+
+      - name: Remove first-start bootstrap credentials
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          koyeb --token "$KOYEB_API_TOKEN" services update clinicit --app clinicit \
+            --env '!CLINICIT_BOOTSTRAP_CLINIC_NAME' \
+            --env '!CLINICIT_BOOTSTRAP_CLINIC_TIMEZONE' \
+            --env '!CLINICIT_BOOTSTRAP_ADMIN_EMAIL' \
+            --env '!CLINICIT_BOOTSTRAP_ADMIN_PASSWORD' \
+            --wait --wait-timeout 20m
+
+      - name: Final health check and summary
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          API_URL="${{ steps.api.outputs.url }}"
+          code="$(curl --silent --show-error --max-time 20 --output /tmp/health-final.json --write-out '%{http_code}' "$API_URL/api/v1/health")"
+          test "$code" = "200"
+          {
+            echo "## ClinicIT API deployed"
+            echo
+            echo "- API: $API_URL"
+            echo "- Health: HTTP $code"
+            echo "- Database: existing Neon production branch"
+            echo "- Notifications: disabled (no provider configured)"
+            echo "- Bootstrap credentials: removed from service configuration"
+            echo
+            echo "Next: configure NEXT_PUBLIC_API_BASE_URL in Vercel to this exact API URL and redeploy the frontend."
+            echo "Demo data only. Do not use real patient data on this free preview deployment."
+          } >> "$GITHUB_STEP_SUMMARY"
