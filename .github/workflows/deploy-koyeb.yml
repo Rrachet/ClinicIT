@@ -66,7 +66,7 @@ jobs:
             --ports 8080:http
             --routes /:8080
             --checks 8080:http:/api/v1/health
-            --checks-grace-period 8080=180
+            --checks-grace-period 8080=600
             --env SPRING_PROFILES_ACTIVE=prod
             --env "DB_URL=$DB_URL"
             --env DB_USERNAME=neondb_owner

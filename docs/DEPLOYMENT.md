@@ -7,7 +7,10 @@ The selected free-first deployment target is:
 - **ML:** omitted initially; the deterministic wait-time fallback is built in
 
 Koyeb documents one free Web Service per organization (512 MB RAM, 0.1 vCPU, 2 GB SSD); it sleeps after one hour
-without traffic. Koyeb may require a payment method during account validation, so do not proceed with any paid plan or
+without traffic. **Expect slow cold starts:** with the free instance's 0.1 vCPU, the API needs about three
+minutes to start (measured locally with the same CPU and memory limits: about 175 s on an empty database, 302 MB peak
+memory). The workflow therefore gives the health check a 600-second grace period. After the service sleeps, the first
+request waits for the same cold start. Koyeb may require a payment method during account validation, so do not proceed with any paid plan or
 add a card if that conflicts with your free-first constraint. The free instance is intended for preview/hobby use, not
 a production clinic with real patient data. See the [Koyeb pricing FAQ](https://www.koyeb.com/docs/faqs/pricing)
 and [instance limits](https://www.koyeb.com/docs/reference/instances).
