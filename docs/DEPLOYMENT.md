@@ -44,23 +44,39 @@ Flyway creates the schema on the API's first start. Hibernate never changes it.
 
 ## 3. API on Koyeb
 
-1. Open the [Koyeb control panel](https://app.koyeb.com/) and create a Web Service from the GitHub repository
-   `Rrachet/ClinicIT`, branch `main`. Authorize Koyeb to access this repository if prompted.
-2. Select **Dockerfile** as the builder and leave the Dockerfile path at the repository root (`Dockerfile`).
-3. Select the `free` instance if available and a supported free region. Expose **8080 / HTTP** at route `/`.
-   Do not expose 8081. Set the maximum scale to one instance; do not enable autoscaling.
-4. Set the environment variables below in Koyeb's service settings. Use the platform's secret inputs for credentials.
-   Do not put connection strings, passwords or bootstrap credentials in GitHub.
+### Automated bootstrap (recommended)
+
+The repository includes [`.github/workflows/deploy-koyeb.yml`](../.github/workflows/deploy-koyeb.yml), a manual workflow that creates or updates the Koyeb API service, waits for deployment, checks the public health endpoint, and removes the first-start bootstrap variables after a successful health check.
+
+1. Sign in to the [Koyeb control panel](https://app.koyeb.com/), select the free plan/instance if available, and authorize Koyeb's GitHub App to access `Rrachet/ClinicIT`. If account validation requires a payment card, stop—do not add one or select a paid plan.
+2. Create a Koyeb API token from [Koyeb API settings](https://app.koyeb.com/user/settings/api/).
+3. In GitHub, open **Settings → Secrets and variables → Actions → New repository secret** and add these four secrets:
+   - `KOYEB_API_TOKEN`: the Koyeb API token.
+   - `CLINICIT_DB_PASSWORD`: the password for the existing Neon `neondb_owner` role.
+   - `CLINICIT_BOOTSTRAP_ADMIN_EMAIL`: the email address you will use for the initial ClinicIT administrator.
+   - `CLINICIT_BOOTSTRAP_ADMIN_PASSWORD`: a unique password of at least 16 characters, without spaces.
+   
+   Never commit these values to files or paste them into issues or chat. The workflow uses GitHub Actions secrets to configure the service; the bootstrap credentials are removed from the Koyeb service after the first successful deployment. The database password remains a deployment secret.
+4. Open **Actions → Bootstrap ClinicIT API on Koyeb → Run workflow**. It uses the existing Neon project/production branch, deploys the root `Dockerfile`, exposes only port 8080, limits the service to one instance, disables notifications, and leaves the optional ML service off.
+5. When the workflow succeeds, copy the exact API URL from the workflow summary. If it fails, inspect its step output and the Koyeb build/runtime logs before rerunning. Do not repeatedly run the bootstrap workflow after a partial failure without checking whether the Koyeb app/service already exists.
+
+The workflow uses the existing production frontend origin `https://clinic-it-kappa.vercel.app` for CORS and patient status links. If you change the frontend domain, update the API's `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL` to that exact origin.
+
+### Manual alternative
+
+1. Create a Web Service from `Rrachet/ClinicIT`, branch `main`, with **Dockerfile** as the builder and the repository-root `Dockerfile`.
+2. Select the `free` instance if available. Expose **8080 / HTTP** at route `/`; do not expose 8081. Set the maximum scale to one instance and disable autoscaling.
+3. Set the environment variables below in Koyeb's service settings. Store credentials using Koyeb's secret inputs, not in the repository.
 
 | Variable | Value |
 |---|---|
 | `SPRING_PROFILES_ACTIVE` | `prod` |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | from the existing Neon production branch (a development password is refused) |
-| `CLINICIT_CORS_ALLOWED_ORIGINS` | the web app's exact origin, e.g. `https://clinic.example.com` (https, no wildcards) |
+| `CLINICIT_CORS_ALLOWED_ORIGINS` | the web app's exact origin, e.g. `https://clinic-it-kappa.vercel.app` (https, no wildcards) |
 | `CLINICIT_PUBLIC_APP_URL` | the same origin: patients' status links are `{this}/status/{code}` |
 | `CLINICIT_NOTIFICATIONS_ENABLED` / `CLINICIT_NOTIFICATIONS_PROVIDER` | `false` / `none` (no real SMS provider ships yet) |
 | `CLINICIT_ML_BASE_URL` | optional: the ML service's private URL (step 4) |
-| `CLINICIT_BOOTSTRAP_CLINIC_NAME`, `…_CLINIC_TIMEZONE`, `…_ADMIN_EMAIL`, `…_ADMIN_PASSWORD` | **first start only** (empty database): the clinic and its first admin. Remove them afterwards |
+| `CLINICIT_BOOTSTRAP_CLINIC_NAME`, `…_CLINIC_TIMEZONE`, `…_ADMIN_EMAIL`, `…_ADMIN_PASSWORD` | **first start only** (empty database): the clinic and its first admin. Remove them after the first successful start |
 
 - **Missing or unsafe settings.** If anything is missing or unsafe, the API **refuses to start** and lists every
   problem in the log (`ProductionConfigurationCheck`). Fix them all and redeploy.
