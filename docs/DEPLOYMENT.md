@@ -21,6 +21,20 @@ The repository's root Dockerfile and production configuration are ready for a co
 full hosted stack is **not yet deployed or verified**; CI's Docker Compose smoke test is a local-stack check, not proof
 of a public deployment. The requirements and safeguards are in [OPERATIONS.md](OPERATIONS.md).
 
+## Alternative: Render (preview)
+
+If Koyeb is not an option, [`render.yaml`](../render.yaml) deploys the same Docker image as a free Render web service
+in [preview mode](PREVIEW.md) (fictional data, read-only):
+
+1. Create an **empty** PostgreSQL database (for example a new Neon or Supabase project) and note its direct,
+   non-pooled JDBC URL, user and password. Flyway creates the schema on first start.
+2. In Render: **New, Blueprint**, select `Rrachet/ClinicIT`, and enter `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` and a
+   `CLINICIT_DEMO_PASSWORD` (12+ characters, shared publicly).
+3. When it is live, set the web app's API URL on Vercel to the Render address and redeploy.
+
+Render's free instance sleeps after inactivity and needs several minutes to start cold, like Koyeb's. It is untested
+here: the blueprint has not been run on Render.
+
 ## 1. What to deploy
 
 | Piece | Source | Where | Public? |
