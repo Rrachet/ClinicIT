@@ -1,5 +1,7 @@
 # Deploying ClinicIT
 
+For a public evaluation deployment that shows the fictional demo clinic read-only, also see [PREVIEW.md](PREVIEW.md).
+
 The selected free-first deployment target is:
 - **Frontend:** Vercel (`frontend/`, already deployed)
 - **API:** Koyeb Web Service built from the repository-root `Dockerfile`
