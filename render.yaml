@@ -1,0 +1,42 @@
+# Render Blueprint: the ClinicIT API as a free Docker web service, in preview mode
+# (fictional demo data, read-only; docs/PREVIEW.md). Alternative to the Koyeb setup in
+# docs/DEPLOYMENT.md. Create it with: Render dashboard > New > Blueprint > pick this repository.
+# Values marked sync: false are asked for in the dashboard and never stored in git.
+services:
+  - type: web
+    name: clinicit-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    # Public, unauthenticated, no database access. The slow JVM start (about 3 minutes on a
+    # free instance) is why a cold request takes a while; Render waits for this to answer.
+    healthCheckPath: /api/v1/health
+    # One instance only: the real-time broker is in memory (docs/OPERATIONS.md).
+    numInstances: 1
+    autoDeploy: false
+    envVars:
+      - key: SPRING_PROFILES_ACTIVE
+        value: prod
+      # An EMPTY PostgreSQL database, direct (non-pooled) connection: Flyway needs a session.
+      # DB_URL looks like jdbc:postgresql://HOST/DB?sslmode=require
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: CLINICIT_CORS_ALLOWED_ORIGINS
+        value: https://clinic-it-kappa.vercel.app
+      - key: CLINICIT_PUBLIC_APP_URL
+        value: https://clinic-it-kappa.vercel.app
+      - key: CLINICIT_NOTIFICATIONS_ENABLED
+        value: "false"
+      - key: CLINICIT_NOTIFICATIONS_PROVIDER
+        value: none
+      - key: CLINICIT_PREVIEW_ENABLED
+        value: "true"
+      - key: CLINICIT_DEMO_ENABLED
+        value: "true"
+      # 12+ characters. Published on purpose as the shared demo login password.
+      - key: CLINICIT_DEMO_PASSWORD
+        sync: false
