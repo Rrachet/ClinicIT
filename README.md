@@ -190,3 +190,7 @@ ClinicIT is an operational system, not a clinical one.
 - **The no-show flag** is a reminder prompt.
 - **Neither** diagnoses, prescribes, prioritises patients, refuses care or makes clinical decisions
   ([AI.md](docs/AI.md), [NO_SHOW_RISK.md](docs/NO_SHOW_RISK.md)).
+
+## License
+
+[MIT](LICENSE) © Amarnath Mishra
