@@ -20,6 +20,8 @@ import java.util.Set;
  * origins and the public app URL are set and use HTTPS; the development notification
  * provider (which records instead of sending) is not active; schema changes stay with
  * Flyway ({@code ddl-auto} validate or none); the ML service URL, if any, is an http(s) URL.
+ * Demo data is refused unless the deployment is an explicit preview ({@code clinicit.preview.enabled}),
+ * and a preview must also have notifications off.
  */
 public class ProductionConfigurationCheck implements EnvironmentPostProcessor {
 
@@ -61,8 +63,20 @@ public class ProductionConfigurationCheck implements EnvironmentPostProcessor {
             }
         }
 
-        if ("true".equalsIgnoreCase(value(env, "clinicit.demo.enabled"))) {
-            problems.add("CLINICIT_DEMO_ENABLED must not be set in production: demo data is for evaluation only");
+        boolean preview = "true".equalsIgnoreCase(value(env, "clinicit.preview.enabled"));
+        boolean demo = "true".equalsIgnoreCase(value(env, "clinicit.demo.enabled"));
+        if (demo && !preview) {
+            problems.add("CLINICIT_DEMO_ENABLED must not be set in production: demo data is for evaluation only "
+                    + "(a public evaluation deployment must opt in with CLINICIT_PREVIEW_ENABLED=true, docs/PREVIEW.md)");
+        }
+        if (preview) {
+            if (!demo) {
+                problems.add("CLINICIT_PREVIEW_ENABLED needs CLINICIT_DEMO_ENABLED=true: a preview shows the fictional "
+                        + "demo clinic, never real data");
+            }
+            if (!"false".equalsIgnoreCase(value(env, "clinicit.notifications.enabled"))) {
+                problems.add("a preview must not send messages: set CLINICIT_NOTIFICATIONS_ENABLED=false");
+            }
         }
 
         String publicUrl = value(env, "clinicit.notifications.status-link-base-url");

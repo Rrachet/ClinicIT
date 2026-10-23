@@ -89,6 +89,38 @@ class ProductionConfigurationCheckTest {
     }
 
     @Test
+    void aPreviewMayLoadDemoDataButNeverSendMessages() {
+        MockEnvironment preview = safeProd()
+                .withProperty("clinicit.preview.enabled", "true")
+                .withProperty("clinicit.demo.enabled", "true");
+        assertThat(ProductionConfigurationCheck.problems(preview)).isEmpty();
+
+        MockEnvironment sending = preview
+                .withProperty("clinicit.notifications.enabled", "true")
+                .withProperty("clinicit.notifications.provider", "real-sms");
+        assertThat(ProductionConfigurationCheck.problems(sending)).singleElement().asString()
+                .contains("a preview must not send messages");
+
+        MockEnvironment unset = preview.withProperty("clinicit.notifications.enabled", "");
+        assertThat(String.join("\n", ProductionConfigurationCheck.problems(unset)))
+                .contains("a preview must not send messages");
+    }
+
+    @Test
+    void aPreviewWithoutDemoDataIsRefused() {
+        MockEnvironment env = safeProd().withProperty("clinicit.preview.enabled", "true");
+        assertThat(ProductionConfigurationCheck.problems(env)).singleElement().asString()
+                .contains("CLINICIT_PREVIEW_ENABLED needs CLINICIT_DEMO_ENABLED=true");
+    }
+
+    @Test
+    void demoDataStillNeedsTheExplicitPreviewSwitch() {
+        MockEnvironment env = safeProd().withProperty("clinicit.demo.enabled", "true");
+        assertThat(ProductionConfigurationCheck.problems(env)).singleElement().asString()
+                .contains("CLINICIT_PREVIEW_ENABLED=true");
+    }
+
+    @Test
     void schemaChangesStayWithFlywayAndMlUrlMustBeHttp() {
         MockEnvironment env = safeProd()
                 .withProperty("spring.jpa.hibernate.ddl-auto", "update")
