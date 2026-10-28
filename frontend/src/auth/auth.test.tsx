@@ -5,6 +5,8 @@ import { apiError, fakeApi } from "@/test/fakeApi";
 import { session, user } from "@/test/fixtures";
 import { navigationMock, router, searchParams } from "@/test/navigation";
 import { renderWithAuth } from "@/test/render";
+import { useEffect } from "react";
+import { useAuth } from "./AuthProvider";
 import { LoginScreen } from "./LoginScreen";
 import { RequireRole } from "./RequireRole";
 import { loadSession } from "./session";
@@ -79,6 +81,28 @@ describe("authentication", () => {
     );
     await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login"));
     expect(screen.queryByText("secret console")).not.toBeInTheDocument();
+  });
+
+  it("keeps the reason when a protected screen's session is revoked mid-use", async () => {
+    api.route("GET /api/v1/auth/me", () => apiError(401, "UNAUTHENTICATED", "Session ended"));
+    function Console() {
+      const { api: client } = useAuth();
+      useEffect(() => {
+        client.me().catch(() => undefined);
+      }, [client]);
+      return <p>secret console</p>;
+    }
+    renderWithAuth(
+      <RequireRole area="reception">
+        <Console />
+      </RequireRole>,
+      { session: session("RECEPTIONIST") },
+    );
+    await waitFor(() => expect(router.replace).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText("secret console")).not.toBeInTheDocument());
+    // Every redirect, including RequireRole's own once the session is gone, says why.
+    expect(router.replace.mock.calls.map(([to]) => to)).not.toContain("/login");
+    expect(router.replace).toHaveBeenLastCalledWith("/login?reason=expired");
   });
 
   it("redirects a doctor who opens the reception console to their own screen", async () => {

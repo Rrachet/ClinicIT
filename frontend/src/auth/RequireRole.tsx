@@ -2,7 +2,8 @@
 
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { useAuth } from "./AuthProvider";
+import { loginPath, useAuth } from "./AuthProvider";
+import { sessionStore } from "./sessionStore";
 import { canEnter, homeFor, type Area } from "./routing";
 import { FullPageSpinner } from "@/ui/Spinner";
 
@@ -13,7 +14,8 @@ export function RequireRole({ area, children }: { area: Area; children: React.Re
   const allowed = session ? canEnter(session.user.role, area) : false;
 
   useEffect(() => {
-    if (session === null) router.replace("/login");
+    // An ended session keeps its reason, so this redirect does not overwrite endSession's.
+    if (session === null) router.replace(loginPath(sessionStore.endReason()));
     else if (session && !allowed) router.replace(homeFor(session.user.role));
   }, [session, allowed, router]);
 
