@@ -46,8 +46,9 @@ logic and no database access.
 
 ## Operations
 
-- **One API instance.** The WebSocket broker is in-memory; everything else is already multi-instance safe
-  ([OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary)).
+- **One API instance by default.** The WebSocket broker is in-memory; with several instances, the outbox relay
+  (`CLINICIT_REALTIME_RELAY_ENABLED`) forwards each instance's events to the others. Everything else is already
+  multi-instance safe ([OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary)).
 - **Probes and metrics** (Spring Boot Actuator, Micrometer, Prometheus) run on an internal management port.
   Liveness never depends on PostgreSQL or the ML service; readiness includes PostgreSQL.
 - **Configuration:** a `prod` profile that refuses unsafe settings at startup.

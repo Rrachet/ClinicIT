@@ -137,7 +137,8 @@ Deploy with `SPRING_PROFILES_ACTIVE=prod`:
 - **Unsafe configuration:** the API refuses to start with missing or unsafe settings (development passwords,
   wildcard or plain-HTTP CORS, demo data, the development notification provider…) and lists them all.
 - **Monitoring:** health probes and Prometheus metrics are on an internal port.
-- **Instances:** run one API instance; the in-memory WebSocket broker is the documented scaling boundary.
+- **Instances:** one API instance by default. To run more (for example on Vercel's container runtime, which scales
+  out by itself), set `CLINICIT_REALTIME_RELAY_ENABLED=true` so live updates reach every instance.
 
 Guides:
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Vercel + Koyeb + Neon (free-first preview deployment).
