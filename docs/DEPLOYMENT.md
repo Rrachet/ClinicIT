@@ -1,10 +1,47 @@
 # Deploying ClinicIT
 
-The selected free-first deployment target is:
-- **Frontend:** Vercel (`frontend/`, already deployed)
-- **API:** Koyeb Web Service built from the repository-root `Dockerfile`
-- **Database:** the existing Neon PostgreSQL project/production branch
-- **ML:** omitted initially; the deterministic wait-time fallback is built in
+## Live deployment: Vercel + Supabase (free tiers)
+
+| Piece | Where | URL / location |
+|---|---|---|
+| Web app | Vercel project `clinic-it` (root `frontend/`, Next.js) | https://clinic-it-kappa.vercel.app |
+| API | Vercel project `clinic-it-api` (root `Dockerfile`, Container Runtime, region `hnd1`) | https://clinic-it-api.vercel.app |
+| Database | Supabase project "Rrachet's Project" (Tokyo), private schema `clinicit`, role `clinicit` | Supavisor pooler, `aws-0-ap-northeast-1` |
+| ML service | not deployed; the deterministic wait-time baseline is used | – |
+
+How it fits together, and why:
+
+- **The API runs as a Vercel Function from the root `Dockerfile`** (Container Runtime, beta on all plans). Vercel
+  scales it out on its own, so `CLINICIT_REALTIME_RELAY_ENABLED=true` makes every instance forward queue events to its
+  own WebSocket clients ([REALTIME.md](REALTIME.md#several-instances-the-outbox-relay)). A WebSocket closes when the
+  function reaches its maximum duration; the web app reconnects by itself. Instances scale down after 5 idle minutes,
+  and a cold start takes a few seconds.
+- **Database connections go through Supabase's pooler in transaction mode** (port 6543,
+  `prepareThreshold=0` in `DB_URL`), so many short-lived instances share a few connections. Session mode allows only
+  15 clients per project and failed under scale-out. **Flyway alone uses session mode** (port 5432,
+  `SPRING_FLYWAY_URL` / `_USER` / `_PASSWORD`), because its migration lock is session-scoped.
+- **ClinicIT's tables live in their own schema `clinicit`,** owned by a dedicated login role with a connection limit.
+  That role cannot read the other app's tables, and the schema is not exposed through Supabase's Data API (which only
+  serves `public`). `search_path` is set on the role and `currentSchema=clinicit` in the JDBC URLs.
+- **`SERVER_TOMCAT_REMOTEIP_INTERNAL_PROXIES=.*`** makes the API read the client IP from `X-Forwarded-For`, which
+  Vercel overwrites (clients cannot spoof it), so login throttling counts per user, not per proxy.
+- **Preview deployments of the API are disabled** and its variables are production-only, so a branch never runs
+  against the production database.
+- **API variables** (project `clinic-it-api`, Production): `SPRING_PROFILES_ACTIVE=prod`, `PORT=8080`, `DB_URL`,
+  `DB_USERNAME` (`clinicit.<project-ref>`), `DB_PASSWORD` (sensitive), `DB_POOL_SIZE=3`,
+  `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=1`, `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`, the three
+  `SPRING_FLYWAY_*`, `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL`
+  (`https://clinic-it-kappa.vercel.app`), `CLINICIT_NOTIFICATIONS_ENABLED=false`,
+  `CLINICIT_NOTIFICATIONS_PROVIDER=none`, `CLINICIT_REALTIME_RELAY_ENABLED=true`, the proxy setting above, and the
+  first-start `CLINICIT_BOOTSTRAP_*` values.
+- **Web app variable** (project `clinic-it`, Production and Preview): `NEXT_PUBLIC_API_BASE_URL=https://clinic-it-api.vercel.app`.
+  Redeploy the web app after changing it.
+
+Limits of this free setup: Vercel Hobby is for non-commercial use, and its monthly function allowances apply (when
+they run out, Functions pause until the next cycle; nothing is billed). The database shares the Supabase free
+project's 500 MB and connection limits with the other app. Use it for evaluation, not for a clinic's real patient data.
+
+## Alternative: Koyeb + Neon
 
 Koyeb documents one free Web Service per organization (512 MB RAM, 0.1 vCPU, 2 GB SSD); it sleeps after one hour
 without traffic. **Expect slow cold starts:** with the free instance's 0.1 vCPU, the API needs about three
@@ -15,9 +52,8 @@ add a card if that conflicts with your free-first constraint. The free instance 
 a production clinic with real patient data. See the [Koyeb pricing FAQ](https://www.koyeb.com/docs/faqs/pricing)
 and [instance limits](https://www.koyeb.com/docs/reference/instances).
 
-The repository's root Dockerfile and production configuration are ready for a container-based API deployment. The
-full hosted stack is **not yet deployed or verified**; CI's Docker Compose smoke test is a local-stack check, not proof
-of a public deployment. The requirements and safeguards are in [OPERATIONS.md](OPERATIONS.md).
+The repository's root Dockerfile and production configuration are ready for a container-based API deployment. This
+Koyeb path has **not been deployed or verified**; the live deployment above is the one that was. The requirements and safeguards are in [OPERATIONS.md](OPERATIONS.md).
 
 ## 1. What to deploy
 
