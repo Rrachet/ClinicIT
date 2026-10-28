@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError } from "@/api/client";
 import { API_CONFIGURED } from "@/api/config";
@@ -44,7 +45,9 @@ export function LoginScreen({ apiConfigured = API_CONFIGURED }: { apiConfigured?
   return (
     <main className="login">
       <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
-        <p className="brand">ClinicIT</p>
+        <Link href="/" className="brand login-brand">
+          ClinicIT
+        </Link>
         <h1 id="login-title">Sign in</h1>
         {reason === "expired" ? <Notice>Your session ended. Please sign in again.</Notice> : null}
         {reason === "password-changed" ? (
@@ -71,6 +74,9 @@ export function LoginScreen({ apiConfigured = API_CONFIGURED }: { apiConfigured?
         <Button type="submit" variant="primary" size="lg" busy={busy} disabled={!apiConfigured}>
           Sign in
         </Button>
+        <p className="muted small">
+          Accounts are created by your clinic admin. <Link href="/">About ClinicIT</Link>
+        </p>
       </form>
     </main>
   );

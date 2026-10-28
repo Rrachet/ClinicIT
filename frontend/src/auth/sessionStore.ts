@@ -9,6 +9,8 @@ import { clearSession, loadSession, saveSession, type Session } from "./session"
 type Listener = () => void;
 
 let current: Session | null | undefined = undefined;
+/** Why the last session ended, if it did not end by signing out; read by screens that redirect to login. */
+let endedBecause: string | null = null;
 const listeners = new Set<Listener>();
 
 function read(): Session | null {
@@ -24,7 +26,9 @@ export const sessionStore = {
   getSnapshot: (): Session | null => read(),
   getServerSnapshot: (): Session | null | undefined => undefined,
   token: (): string | null => read()?.token ?? null,
-  set(session: Session | null) {
+  endReason: (): string | null => endedBecause,
+  set(session: Session | null, endReason: string | null = null) {
+    endedBecause = session ? null : endReason;
     if (session) saveSession(session);
     else clearSession();
     current = session;
@@ -33,5 +37,6 @@ export const sessionStore = {
   /** Tests only: forget the cached value so the next read goes to storage. */
   resetForTests() {
     current = undefined;
+    endedBecause = null;
   },
 };

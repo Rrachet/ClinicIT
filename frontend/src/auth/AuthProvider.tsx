@@ -21,6 +21,11 @@ interface AuthContextValue {
 /** Why the sign-in screen is shown again; it explains it to the user. */
 export type SessionEndReason = "expired" | "password-changed";
 
+/** The sign-in screen, with a note on why the user is back there. */
+export function loginPath(reason?: string | null): string {
+  return reason ? `/login?reason=${reason}` : "/login";
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children, apiBaseUrl = API_BASE_URL }: { children: React.ReactNode; apiBaseUrl?: string }) {
@@ -29,8 +34,8 @@ export function AuthProvider({ children, apiBaseUrl = API_BASE_URL }: { children
 
   const endSession = useCallback(
     (reason?: SessionEndReason) => {
-      sessionStore.set(null);
-      router.replace(reason ? `/login?reason=${reason}` : "/login");
+      sessionStore.set(null, reason ?? null);
+      router.replace(loginPath(reason));
     },
     [router],
   );
