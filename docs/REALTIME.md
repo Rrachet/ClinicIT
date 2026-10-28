@@ -163,19 +163,27 @@ listed below is denied.
 - **The public patient status page (Phase 5)** polls its own sanitised endpoint,
   `GET /api/v1/public/queue-status/{code}`. It never touches these topics. See docs/FRONTEND.md.
 
-## Scaling boundary: one instance
+## Several instances: the outbox relay
 
-The in-memory broker delivers only to clients connected to the same application instance, so **ClinicIT is deployed
-as a single API instance**. With two instances today, a change committed on one would reach only that instance's
-screens, and a logout would close sockets on other instances only at the next minute-by-minute revalidation.
+The in-memory broker delivers only to clients connected to the same application instance. A deployment that runs
+more than one instance (for example serverless containers, which scale out on their own) sets
+`CLINICIT_REALTIME_RELAY_ENABLED=true`. Then `QueueEventRelay` runs on every instance:
 
-To run several instances, replace the in-memory broker with a shared fan-out, and broadcast `SessionsRevoked` the same
-way:
+- Once a second it reads the outbox rows of the last 30 seconds and publishes those this instance has not delivered
+  to its own clients. Events it committed itself were already sent by the dispatcher's fast path and are skipped.
+- It reads a time window, not an id cursor: outbox ids are allocated before commit, so a slow transaction can commit
+  a lower id after a higher one, and a cursor would skip it.
+- Rows already in the window when an instance starts are not replayed; clients load current state over REST.
+- A failed publish is retried on the next tick. Delivery stays at-least-once, and clients dedupe on `eventId`.
 
-- Spring's STOMP broker relay to RabbitMQ or ActiveMQ (a configuration change in `WebSocketConfig`), or
-- PostgreSQL `LISTEN/NOTIFY` from the outbox, so every instance publishes every event to its own clients.
+It needs no message broker and no `LISTEN` session. Live updates reach other instances' screens within about a
+second.
 
-The outbox and the event contract stay the same either way. Everything else (tokens, locks, sessions, outboxes,
+A logout still closes sockets on other instances only at the next minute-by-minute revalidation. With one instance
+(the default), the relay is off and nothing changes.
+
+For many instances or high event volume, a STOMP broker relay (RabbitMQ, ActiveMQ) would replace the polling. The
+outbox and the event contract stay the same either way. Everything else (tokens, locks, sessions, outboxes,
 notification claiming) already lives in PostgreSQL. See [OPERATIONS.md](OPERATIONS.md#websocket-scaling-boundary).
 `clinicit_websocket_connections{state}` reports open and authenticated connections per instance.
 
@@ -184,6 +192,7 @@ notification claiming) already lives in PostgreSQL. See [OPERATIONS.md](OPERATIO
 | Suite | Proves |
 |---|---|
 | `RealtimeQueueIntegrationTest` | HTTP actions change the database and emit the matching event, with the correct fields and increasing versions. Skip, requeue and no-show events. The exact field set, with no patient data. Rejected actions and **work rolled back after the event was recorded** emit nothing. A delivery failure keeps the change and leaves the row pending; the poller re-sends it with the same `eventId`. Retention purge. A concurrent workload yields exactly one event per change and replays to the database state. |
+| `QueueEventRelayIntegrationTest` | An event committed by another instance (an outbox row this JVM's dispatcher never saw) reaches this instance's subscribers exactly once. Events this instance delivered itself are not repeated. Rows present at start are not replayed. A failed publish is retried. Events older than the window are ignored. Removing the "already delivered" check fails all five. |
 | `RealtimeSecurityIntegrationTest` | CONNECT without or with a bad token is refused. Other clinics' topics are refused, including your own clinic path with another clinic's doctor. Another clinic's activity never reaches you. Doctors are limited to their own topic. Front desk sees the whole clinic. Unknown topics and SEND frames are refused. Logout, user disable and password change close the socket. Expiry closes it via the sweep. The handshake from an unknown origin is refused. |
 
 Each of these protections was broken on purpose and a test failed:

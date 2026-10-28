@@ -67,6 +67,12 @@ clinicit:
     window: PT1M
     max-requests-per-ip: 300
     max-misses-per-ip: 20
+  queue:
+    events:
+      relay:
+        # More than one API instance (e.g. serverless containers): each instance also forwards
+        # events committed by the others to its own WebSocket clients (QueueEventRelay).
+        enabled: ${CLINICIT_REALTIME_RELAY_ENABLED:false}
   cors:
     # Comma-separated exact origins of the web frontend, e.g. https://app.example.com
     allowed-origins: ${CLINICIT_CORS_ALLOWED_ORIGINS:}

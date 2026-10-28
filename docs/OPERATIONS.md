@@ -154,10 +154,11 @@ only to browsers connected to the same instance. Running two instances behind a 
 Everything else is already multi-instance safe: tokens, locks, sessions, login throttling, the outboxes and
 notification claiming all live in PostgreSQL, and the scheduled cleanups are idempotent.
 
-**To run several instances**, replace the in-memory broker with a shared fan-out: Spring's STOMP broker relay to
-RabbitMQ or ActiveMQ (a configuration change in `WebSocketConfig`), or PostgreSQL `LISTEN/NOTIFY` from the outbox so
-every instance publishes every event to its own clients. Also broadcast `SessionsRevoked` the same way. The event
-contract and the clients do not change. This is deliberately not built until one instance is not enough.
+**To run several instances**, set `CLINICIT_REALTIME_RELAY_ENABLED=true`: every instance then forwards events
+committed by the others to its own clients from the outbox, within about a second
+([REALTIME.md](REALTIME.md#several-instances-the-outbox-relay)). Point 1 above no longer applies; points 2 and 3
+still do. For many instances, a STOMP broker relay to RabbitMQ or ActiveMQ would replace the polling; the event
+contract and the clients do not change.
 
 ## Security checklist for a deployment
 

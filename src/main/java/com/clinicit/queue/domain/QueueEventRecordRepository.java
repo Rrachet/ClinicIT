@@ -17,6 +17,10 @@ public interface QueueEventRecordRepository extends JpaRepository<QueueEventReco
             """)
     List<QueueEventRecord> findPendingOlderThan(Instant olderThan, org.springframework.data.domain.Limit limit);
 
+    /** Events that occurred after {@code since}, published or not, oldest first. */
+    @Query("select e from QueueEventRecord e where e.occurredAt > :since order by e.id")
+    List<QueueEventRecord> findOccurredSince(Instant since, org.springframework.data.domain.Limit limit);
+
     @Modifying
     @Query("update QueueEventRecord e set e.publishedAt = :now where e.id = :id and e.publishedAt is null")
     int markPublished(Long id, Instant now);
