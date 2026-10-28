@@ -10,6 +10,7 @@ import type {
   LoginResponse,
   NoShowRisk,
   NoShowRiskEvaluation,
+  MessagingSettings,
   Patient,
   PatientNotification,
   PublicQueueStatus,
@@ -93,6 +94,7 @@ export function clinicApi(http: ApiClient) {
       http.get<WaitEstimates>("/api/v1/queues/today/wait-estimates", { query: { doctorId } }),
     queueNoShow: (entryId: string) => http.post<QueueEntry>(`/api/v1/queue-entries/${id(entryId)}/no-show`),
 
+    messagingSettings: () => http.get<MessagingSettings>("/api/v1/notifications/settings"),
     notifications: (appointmentId: string) =>
       http.get<PatientNotification[]>("/api/v1/notifications", { query: { appointmentId } }),
     retryNotification: (notificationId: string) =>

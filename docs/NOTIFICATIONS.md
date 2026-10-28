@@ -104,6 +104,7 @@ for visit, a date of birth or anything clinical, and a test checks for each of t
 
 | Endpoint | Who | |
 |---|---|---|
+| `GET /api/v1/notifications/settings` | ADMIN, RECEPTIONIST | `{ patientMessaging, channel }`; when messaging is off, the reception screen opens the queue link for staff to share instead of saying it was sent |
 | `GET /api/v1/notifications?appointmentId=` | ADMIN, RECEPTIONIST | messages for one appointment, recipient masked |
 | `POST /api/v1/notifications/{id}/retry` | ADMIN, RECEPTIONIST | retry a FAILED message |
 

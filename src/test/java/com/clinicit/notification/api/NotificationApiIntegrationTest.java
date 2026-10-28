@@ -57,6 +57,18 @@ class NotificationApiIntegrationTest extends PostgresIntegrationTest {
     }
 
     @Test
+    void frontDeskCanTellWhetherPatientsAreMessaged() throws Exception {
+        mvc.perform(get("/api/v1/notifications/settings").with(bearer(deskA)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.patientMessaging").value(true))
+                .andExpect(jsonPath("$.channel").value("SMS"));
+        mvc.perform(get("/api/v1/notifications/settings").with(bearer(doctorTokenA)))
+                .andExpect(status().isForbidden());
+        mvc.perform(get("/api/v1/notifications/settings"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
     void frontDeskSeesTheMessagesWithTheNumberMasked() throws Exception {
         mvc.perform(get("/api/v1/notifications").param("appointmentId", appointmentA.getId().toString()).with(bearer(deskA)))
                 .andExpect(status().isOk())

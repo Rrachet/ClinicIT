@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import type { ClinicApi } from "@/api/clinicApi";
 import type { NotificationType, PatientNotification } from "@/api/types";
 import { Button } from "@/ui/Button";
-import { ErrorBanner } from "@/ui/Feedback";
+import { ErrorBanner, Notice } from "@/ui/Feedback";
 import { useAsync } from "@/ui/useAsync";
 import { statusLink } from "./workflows";
 
@@ -27,12 +27,19 @@ const STATUS_LABEL = { PENDING: "Sending", SENT: "Sent", FAILED: "Failed" } as c
  * What was sent to the patient (the queue link goes out automatically when they join),
  * with a retry for failed messages and the link itself as a manual fallback.
  */
-export function StatusLinkDialog({ api, link, onClose }: { api: ClinicApi; link: LinkTarget | null; onClose: () => void }) {
-  if (!link) return null;
-  return <StatusLinkDialogBody api={api} link={link} onClose={onClose} />;
+interface DialogProps {
+  api: ClinicApi;
+  /** false when the clinic does not message patients; null or omitted when unknown. */
+  messaging?: boolean | null;
+  onClose: () => void;
 }
 
-function StatusLinkDialogBody({ api, link, onClose }: { api: ClinicApi; link: LinkTarget; onClose: () => void }) {
+export function StatusLinkDialog({ link, ...props }: DialogProps & { link: LinkTarget | null }) {
+  if (!link) return null;
+  return <StatusLinkDialogBody link={link} {...props} />;
+}
+
+function StatusLinkDialogBody({ api, link, messaging = null, onClose }: DialogProps & { link: LinkTarget }) {
   const [copied, setCopied] = useState(false);
   const [retrying, setRetrying] = useState<string | null>(null);
   const [error, setError] = useState<unknown>(null);
@@ -57,6 +64,12 @@ function StatusLinkDialogBody({ api, link, onClose }: { api: ClinicApi; link: Li
       <div className="dialog dialog-wide" role="dialog" aria-modal="true" aria-labelledby="link-title">
         <h2 id="link-title">Messages for token #{link.token}</h2>
         <ErrorBanner error={error ?? messages.error} onDismiss={() => setError(null)} />
+        {messaging === false ? (
+          <Notice>
+            Messages to patients are switched off for this clinic, so nothing is sent automatically. Share this link
+            with the patient so they can follow the queue on their phone.
+          </Notice>
+        ) : null}
 
         {messages.loading ? (
           <p className="muted">Loading…</p>
