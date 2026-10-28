@@ -28,7 +28,8 @@ describe("ReceptionConsole", () => {
       .route("GET /api/v1/clinic", () => ({ body: CLINIC }))
       .route("GET /api/v1/doctors", () => ({ body: [SHARMA, MEHTA] }))
       .route("GET /api/v1/appointments", () => ({ body: appointments }))
-      .route("GET /api/v1/no-show-risk", () => ({ body: [] }));
+      .route("GET /api/v1/no-show-risk", () => ({ body: [] }))
+      .route("GET /api/v1/notifications/settings", () => ({ body: { patientMessaging: true, channel: "SMS" } }));
     estimateStatus = 200;
     // Boards and wait estimates differ per doctor, so they are served here by doctorId.
     vi.stubGlobal("fetch", async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -251,6 +252,47 @@ describe("ReceptionConsole", () => {
     await userEvent.click(screen.getByRole("button", { name: "Confirm: Booked Person" }));
     await waitFor(() => expect(api.callsTo("POST", "/api/v1/appointments/booked/confirm")).toHaveLength(1));
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+  });
+
+  describe("adding an arrived patient to the queue", () => {
+    const entry = {
+      id: "qr", clinicId: CLINIC.id, doctorId: SHARMA.id, appointmentId: "arr", queueDate: CLINIC.today, tokenNumber: 9,
+      status: "WAITING", checkedInAt: null, calledAt: null, consultationStartedAt: null, completedAt: null,
+      skippedAt: null, version: 0, statusCode: "code-ravi",
+    };
+    beforeEach(() => {
+      appointments.push(appointment({ id: "arr", patientName: "Ravi Kumar", status: "ARRIVED" }));
+      api.route("POST /api/v1/queue-entries", () => ({ status: 201, body: entry }));
+      api.route("GET /api/v1/notifications", () => ({ body: [] }));
+    });
+
+    it("says the link is on its way when the clinic messages patients", async () => {
+      api.route("GET /api/v1/notifications/settings", () => ({ body: { patientMessaging: true, channel: "SMS" } }));
+      await open();
+      await waitFor(() => expect(api.callsTo("GET", "/api/v1/notifications/settings")).toHaveLength(1));
+      await userEvent.click(screen.getByRole("button", { name: "Add to queue: Ravi Kumar" }));
+      expect(await screen.findByText("Ravi Kumar is token #9. The queue link is being sent to them.")).toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    it("hands the link to reception when messages are off, and never claims it was sent", async () => {
+      api.route("GET /api/v1/notifications/settings", () => ({ body: { patientMessaging: false, channel: "SMS" } }));
+      await open();
+      await waitFor(() => expect(api.callsTo("GET", "/api/v1/notifications/settings")).toHaveLength(1));
+      await userEvent.click(screen.getByRole("button", { name: "Add to queue: Ravi Kumar" }));
+      expect(await screen.findByText("Ravi Kumar is token #9. Messages are off, so give them their queue link.")).toBeInTheDocument();
+      const dialog = await screen.findByRole("dialog", { name: "Messages for token #9" });
+      expect(within(dialog).getByText(/switched off for this clinic/)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/Status link/)).toHaveValue("http://localhost:3000/status/code-ravi");
+      expect(screen.queryByText(/being sent/)).not.toBeInTheDocument();
+    });
+
+    it("makes no claim about sending when the setting cannot be loaded", async () => {
+      api.route("GET /api/v1/notifications/settings", () => ({ status: 503, body: { status: 503, code: "INTERNAL_ERROR", message: "x" } }));
+      await open();
+      await userEvent.click(screen.getByRole("button", { name: "Add to queue: Ravi Kumar" }));
+      expect(await screen.findByText("Ravi Kumar is token #9. Open Messages to share their queue link.")).toBeInTheDocument();
+    });
   });
 
   it("explains a forbidden action instead of failing silently", async () => {

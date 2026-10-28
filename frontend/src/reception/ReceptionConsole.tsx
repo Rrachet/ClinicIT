@@ -36,6 +36,26 @@ export function ReceptionConsole() {
   const clinic = setup.data?.[0] ?? null;
   const doctors = useMemo(() => setup.data?.[1] ?? [], [setup.data]);
 
+  // Whether the queue link goes out by message; if this cannot be loaded, the desk is not told it was sent.
+  const messagingSettings = useAsync(useCallback(() => api.messagingSettings().catch(() => null), [api]));
+  const messaging = messagingSettings.data?.patientMessaging ?? null;
+
+  /** Tells the desk the new token and how the patient gets their link. */
+  const announceJoined = useCallback(
+    (name: string | null, appointmentId: string, token: number, statusCode: string) => {
+      const who = `${name ?? "Patient"} is token #${token}.`;
+      if (messaging === true) {
+        setNotice(`${who} The queue link is being sent to them.`);
+      } else if (messaging === false) {
+        setNotice(`${who} Messages are off, so give them their queue link.`);
+        setLink({ appointmentId, code: statusCode, token });
+      } else {
+        setNotice(`${who} Open Messages to share their queue link.`);
+      }
+    },
+    [messaging],
+  );
+
   const today = clinic?.today;
   const appointmentList = useAsync(useCallback(() => (today ? api.appointments(today) : Promise.resolve([])), [api, today]));
   const appointments = appointmentList.data ?? [];
@@ -84,7 +104,7 @@ export function ReceptionConsole() {
     try {
       const result = await perform(api, action.key, appointment, itemForAppointment(live.queue, appointment.id));
       if (action.key === "join" && result && "tokenNumber" in result) {
-        setNotice(`${appointment.patientName ?? "Patient"} is token #${result.tokenNumber}. The queue link is being sent to them.`);
+        announceJoined(appointment.patientName, appointment.id, result.tokenNumber, result.statusCode);
       }
       reloadAppointments();
       if (action.key === "join") await live.reload();
@@ -196,8 +216,11 @@ export function ReceptionConsole() {
                 reloadAppointments();
                 if (result.queueEntry) {
                   void live.reload();
-                  setNotice(
-                    `${result.appointment.patientName ?? "Patient"} is token #${result.queueEntry.tokenNumber}. The queue link is being sent to them.`,
+                  announceJoined(
+                    result.appointment.patientName,
+                    result.appointment.id,
+                    result.queueEntry.tokenNumber,
+                    result.queueEntry.statusCode,
                   );
                 } else {
                   setNotice(`Booked ${result.appointment.patientName ?? "patient"}`);
@@ -214,7 +237,7 @@ export function ReceptionConsole() {
         onCancel={() => setPending(null)}
         onConfirm={() => pending && void run(pending.appointment, pending.action)}
       />
-      <StatusLinkDialog api={api} link={link} onClose={() => setLink(null)} />
+      <StatusLinkDialog api={api} link={link} messaging={messaging} onClose={() => setLink(null)} />
       {rescheduling ? (
         <RescheduleDialog
           api={api}

@@ -67,6 +67,7 @@ Appointment responses include `patientName`. Queue entry and board rows include 
 Patients are messaged automatically (confirmation, queue link, nearly your turn, your turn).
 See [NOTIFICATIONS.md](NOTIFICATIONS.md).
 
+- GET  /api/v1/notifications/settings         (front desk) { patientMessaging, channel }: whether patients are messaged automatically
 - GET  /api/v1/notifications?appointmentId=   (front desk) messages for one appointment; recipient masked
 - POST /api/v1/notifications/{id}/retry       (front desk) retry a FAILED message
 

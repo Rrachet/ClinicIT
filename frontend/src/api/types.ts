@@ -205,6 +205,12 @@ export type NotificationType = "APPOINTMENT_CONFIRMED" | "PATIENT_JOINED_QUEUE" 
 export type NotificationStatus = "PENDING" | "SENT" | "FAILED";
 
 /** A message sent (or being sent) to a patient. recipient is masked by the server. */
+/** Whether patients are messaged automatically; when off, reception hands over the queue link. */
+export interface MessagingSettings {
+  patientMessaging: boolean;
+  channel: string;
+}
+
 export interface PatientNotification {
   id: string;
   appointmentId: string;
