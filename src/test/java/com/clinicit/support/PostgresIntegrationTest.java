@@ -74,6 +74,8 @@ public abstract class PostgresIntegrationTest {
         // A fake ML service that each test can script; it answers 503 unless told otherwise.
         registry.add("clinicit.prediction.ml-base-url", () -> FakeModelServer.get().baseUrl());
         registry.add("clinicit.prediction.timeout", () -> "PT0.3S");
+        registry.add("clinicit.receptionist.api-key", () -> "test-key");
+        registry.add("clinicit.receptionist.base-url", () -> FakeClaudeServer.get().baseUrl());
         registry.add("management.server.port", () -> "0"); // random internal actuator port
     }
 
@@ -101,6 +103,7 @@ public abstract class PostgresIntegrationTest {
     @Autowired protected WaitTimePredictionService waitTimePredictions;
     @Autowired protected PublicStatusRateLimiter publicStatusRateLimiter;
     @Autowired protected com.clinicit.checkin.api.CheckInRateLimiter checkInRateLimiter;
+    @Autowired protected com.clinicit.receptionist.api.ReceptionistRateLimiter receptionistRateLimiter;
 
     @BeforeEach
     void resetDatabase() {
@@ -109,8 +112,10 @@ public abstract class PostgresIntegrationTest {
         waitTimePredictions.reset();
         publicStatusRateLimiter.reset();
         checkInRateLimiter.reset();
+        receptionistRateLimiter.reset();
+        FakeClaudeServer.get().reset();
         jdbc.execute("""
-                truncate table operational_events, notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
+                truncate table receptionist_conversations, operational_events, notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade
                 """);
     }

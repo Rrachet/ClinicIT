@@ -39,10 +39,15 @@ public class AvailabilityService {
     }
 
     public AvailabilityResponse forDay(Actor actor, UUID doctorId, LocalDate date) {
-        DoctorProfile doctor = doctors.findByIdAndClinicId(doctorId, actor.clinicId())
+        return forDay(actor.clinicId(), doctorId, date);
+    }
+
+    /** One doctor's bookable day in a clinic (also used by the AI receptionist). */
+    public AvailabilityResponse forDay(UUID clinicId, UUID doctorId, LocalDate date) {
+        DoctorProfile doctor = doctors.findByIdAndClinicId(doctorId, clinicId)
                 .orElseThrow(() -> new NotFoundException("Doctor not found"));
         DoctorSchedule schedule = schedules.forBooking(doctor);
-        LocalDateTime now = clinicTime.now(actor.clinicId());
+        LocalDateTime now = clinicTime.now(clinicId);
 
         List<LocalDateTime> booked = jdbc.query("""
                 select scheduled_at from appointments
@@ -50,7 +55,7 @@ public class AvailabilityService {
                   and scheduled_at >= ? and scheduled_at < ?
                 """.formatted(String.join(",", BookingRules.HOLDING_SLOT.stream().map(s -> "'" + s + "'").toList())),
                 (rs, i) -> rs.getObject(1, LocalDateTime.class),
-                doctorId, actor.clinicId(), date.atStartOfDay().minusMinutes(schedule.appointmentMinutes()),
+                doctorId, clinicId, date.atStartOfDay().minusMinutes(schedule.appointmentMinutes()),
                 date.plusDays(1).atStartOfDay());
 
         List<AvailabilityResponse.Slot> slots = new ArrayList<>();

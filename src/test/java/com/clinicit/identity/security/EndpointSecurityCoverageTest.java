@@ -29,7 +29,9 @@ class EndpointSecurityCoverageTest extends PostgresIntegrationTest {
     private static final Set<String> PUBLIC = Set.of(
             "POST /api/v1/auth/login", "GET /api/v1/health", "GET /api/v1/public/queue-status/{code}",
             // Self check-in from the clinic's QR code; rate limited (docs/SELF_CHECK_IN.md).
-            "GET /api/v1/public/check-in/{code}", "POST /api/v1/public/check-in/{code}");
+            "GET /api/v1/public/check-in/{code}", "POST /api/v1/public/check-in/{code}",
+            // AI receptionist chat from the same QR code; rate limited (docs/AI_RECEPTIONIST.md).
+            "GET /api/v1/public/receptionist/{code}", "POST /api/v1/public/receptionist/{code}/messages");
 
     @Autowired RequestMappingHandlerMapping mappings;
     @Autowired MockMvc mvc;

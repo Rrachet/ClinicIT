@@ -20,9 +20,12 @@ include real patient data. Please allow reasonable time for a fix before disclos
   references, so one clinic cannot read or change another's patients, doctors or queues.
 
 **Public pages**
-- The self check-in page and the patient status page need no login. They are rate limited per address, return no
+- The self check-in page, the AI receptionist chat and the patient status page need no login. They are rate limited per address, return no
   doctor or patient details beyond the patient's own token, and use unguessable codes; status links stop working
   after the day.
+- The AI receptionist can act only through four tools that apply the same rules as the check-in form and desk
+  bookings; its Anthropic API key stays on the server, and chat transcripts are deleted after a day
+  ([docs/AI_RECEPTIONIST.md](docs/AI_RECEPTIONIST.md)).
 
 **Production configuration**
 - With `SPRING_PROFILES_ACTIVE=prod` the API refuses to start with unsafe settings (development passwords, wildcard

@@ -38,6 +38,13 @@ export function DoctorConsole() {
     refreshTimer.current = setTimeout(reloadAppointments, 300);
   }, [reloadAppointments]);
   useEffect(() => () => clearTimeout(refreshTimer.current), []);
+  // Bookings made by patients themselves (the AI receptionist) are not queue events: refresh the list now and then.
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (document.visibilityState === "visible") reloadAppointments();
+    }, 60_000);
+    return () => clearInterval(timer);
+  }, [reloadAppointments]);
 
   const doctorIds = useMemo(() => [doctorId], [doctorId]);
   const live = useLiveQueue({

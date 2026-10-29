@@ -107,14 +107,16 @@ public class SelfCheckInService {
             }
         }
 
+        // Booked ahead (for example through the AI receptionist): queue them for that booking.
+        if (known.isPresent()) {
+            Optional<SelfCheckInResponse> booked = arriveForBooking(clinicId, known.get().getId(), today);
+            if (booked.isPresent()) {
+                return booked.get();
+            }
+        }
+
         DoctorProfile doctor = chooseDoctor(clinicId, type, today);
-        Patient patient = known.orElseGet(() -> {
-            Patient created = new Patient();
-            created.setClinicId(clinicId);
-            created.setFullName(name);
-            created.setPhone(phone);
-            return patients.save(created);
-        });
+        Patient patient = known.orElseGet(() -> createPatient(clinicId, name, phone));
 
         String reason = request.reason() == null || request.reason().isBlank() ? null : request.reason().strip();
         Appointment appointment = appointments.createSelfCheckIn(clinicId, patient.getId(), doctor.getId(), type.getId(),
@@ -122,6 +124,45 @@ public class SelfCheckInService {
         QueueEntryResponse entry = queue.joinSelfCheckIn(clinicId, appointment.getId());
         return new SelfCheckInResponse(entry.statusCode(), entry.tokenNumber(), doctor.getDisplayName(), doctor.getRoom(),
                 false);
+    }
+
+    /**
+     * The patient with this name and phone in the clinic, or a new patient record. Spaces,
+     * dashes and brackets in the phone are ignored; names match regardless of case.
+     */
+    public Patient patientFor(UUID clinicId, String fullName, String rawPhone) {
+        String name = fullName.strip().replaceAll("\\s+", " ");
+        String phone = normalizePhone(rawPhone);
+        return patients.findFirstByClinicIdAndPhoneAndFullNameIgnoreCase(clinicId, phone, name)
+                .orElseGet(() -> createPatient(clinicId, name, phone));
+    }
+
+    private Patient createPatient(UUID clinicId, String name, String phone) {
+        Patient created = new Patient();
+        created.setClinicId(clinicId);
+        created.setFullName(name);
+        created.setPhone(phone);
+        return patients.save(created);
+    }
+
+    /** Today's earliest booked or confirmed appointment of this patient becomes arrived and queued. */
+    private Optional<SelfCheckInResponse> arriveForBooking(UUID clinicId, UUID patientId, LocalDate today) {
+        List<UUID> bookings = jdbc.queryForList("""
+                select id from appointments
+                where clinic_id = ? and patient_id = ? and not walk_in and status in ('BOOKED', 'CONFIRMED')
+                  and scheduled_at >= ? and scheduled_at < ?
+                order by scheduled_at
+                limit 1
+                """, UUID.class, clinicId, patientId, today.atStartOfDay(), today.plusDays(1).atStartOfDay());
+        if (bookings.isEmpty()) {
+            return Optional.empty();
+        }
+        Appointment appointment = appointments.arriveSelfCheckIn(clinicId, bookings.get(0));
+        DoctorProfile doctor = doctors.findByIdAndClinicId(appointment.getDoctorId(), clinicId)
+                .orElseThrow(() -> new NotFoundException("Doctor not found"));
+        QueueEntryResponse entry = queue.joinSelfCheckIn(clinicId, appointment.getId());
+        return Optional.of(new SelfCheckInResponse(entry.statusCode(), entry.tokenNumber(), doctor.getDisplayName(),
+                doctor.getRoom(), false));
     }
 
     /**

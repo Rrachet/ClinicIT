@@ -18,6 +18,8 @@ import type {
   QueueAnalytics,
   QueueBoard,
   QueueEntry,
+  ReceptionistInfo,
+  ReceptionistReply,
   Role,
   SelfCheckInResult,
   TimeOff,
@@ -134,6 +136,10 @@ export function clinicApi(http: ApiClient) {
       http.get<PublicCheckIn>(`/api/v1/public/check-in/${id(code)}`, { anonymous: true }),
     selfCheckIn: (code: string, body: { fullName: string; phone: string; visitTypeId: string; reason?: string }) =>
       http.post<SelfCheckInResult>(`/api/v1/public/check-in/${id(code)}`, { body, anonymous: true }),
+    receptionist: (code: string) =>
+      http.get<ReceptionistInfo>(`/api/v1/public/receptionist/${id(code)}`, { anonymous: true }),
+    receptionistMessage: (code: string, body: { conversationId?: string; message: string }) =>
+      http.post<ReceptionistReply>(`/api/v1/public/receptionist/${id(code)}/messages`, { body, anonymous: true }),
     publicStatus: (code: string) =>
       http.get<PublicQueueStatus>(`/api/v1/public/queue-status/${id(code)}`, { anonymous: true }),
   };

@@ -120,6 +120,43 @@ public class AppointmentService {
         return saved;
     }
 
+    /**
+     * A patient booked a later slot through the AI receptionist: the same slot rules as a desk
+     * booking (hours, breaks, leave, no double booking, under the doctor lock), confirmed at once
+     * because the patient booked it themselves. No staff member acts (docs/AI_RECEPTIONIST.md).
+     */
+    public Appointment createSelfBooked(UUID clinicId, UUID patientId, UUID doctorId, UUID visitTypeId,
+                                        LocalDateTime start, String reason) {
+        DoctorProfile doctor = doctors.findByIdAndClinicIdForUpdate(doctorId, clinicId)
+                .orElseThrow(() -> new NotFoundException("Doctor not found"));
+        LocalDateTime scheduledAt = start.truncatedTo(ChronoUnit.MINUTES);
+        bookingRules.requireSlot(doctor, scheduledAt, null);
+
+        Appointment appointment = new Appointment();
+        appointment.setClinicId(clinicId);
+        appointment.setPatientId(patientId);
+        appointment.setDoctorId(doctorId);
+        appointment.setScheduledAt(scheduledAt);
+        appointment.setWalkIn(false);
+        appointment.setVisitTypeId(visitTypeId);
+        appointment.setReasonSummary(reason);
+        Appointment saved = repository.save(appointment);
+        history.booked(saved, null, clinicTime.instant());
+        apply(null, saved, AppointmentStatus.CONFIRMED);
+        events.publishEvent(new AppointmentConfirmed(saved.getId(), saved.getClinicId()));
+        return saved;
+    }
+
+    /** A patient with a booking checked themselves in at the clinic: it becomes ARRIVED. */
+    public Appointment arriveSelfCheckIn(UUID clinicId, UUID appointmentId) {
+        Appointment appointment = repository.findByIdAndClinicIdForUpdate(appointmentId, clinicId)
+                .orElseThrow(() -> new NotFoundException("Appointment not found"));
+        if (appointment.getStatus() == AppointmentStatus.BOOKED) {
+            apply(null, appointment, AppointmentStatus.CONFIRMED);
+        }
+        return apply(null, appointment, AppointmentStatus.ARRIVED);
+    }
+
     @Transactional(readOnly = true)
     public AppointmentResponse get(Actor actor, UUID id) {
         Appointment appointment = repository.findByIdAndClinicId(id, actor.clinicId())

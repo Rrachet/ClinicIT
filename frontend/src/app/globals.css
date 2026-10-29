@@ -383,3 +383,28 @@ button, input, select { font: inherit; }
   .qr-steps { font-size: 1.3rem; }
   .qr-emergency { font-size: 1.1rem; }
 }
+
+/* ---- AI receptionist chat (patient's phone) ---- */
+.chat { max-width: 560px; margin: 0 auto; min-height: 100vh; display: flex; flex-direction: column; gap: 0.6rem; padding: 0.75rem 0.85rem 1rem; }
+.chat-head { display: flex; align-items: center; gap: 0.7rem; padding: 0.4rem 0.2rem; }
+.chat-head > div { display: flex; flex-direction: column; }
+.chat-emergency { margin: 0; }
+.chat-lines { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.55rem; flex: 1; }
+.chat-line { max-width: 85%; display: flex; flex-direction: column; gap: 0.45rem; }
+.chat-line p { margin: 0; padding: 0.6rem 0.8rem; border-radius: 16px; line-height: 1.4; white-space: pre-wrap; }
+.chat-receptionist { align-self: flex-start; }
+.chat-receptionist p { background: var(--surface); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.chat-patient { align-self: flex-end; }
+.chat-patient p { background: var(--primary); color: #fff; border-bottom-right-radius: 4px; }
+.chat-card { display: flex; flex-direction: column; gap: 0.3rem; padding: 0.85rem; border-radius: 14px; border: 2px solid var(--primary); background: var(--primary-soft); }
+.chat-card-go { border-color: var(--ok); background: var(--ok-soft); align-items: flex-start; }
+.chat-card a.btn { text-decoration: none; margin-top: 0.3rem; }
+.chat-typing { flex-direction: row; gap: 0.3rem; padding: 0.8rem; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: fit-content; }
+.chat-typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); opacity: 0.6; }
+.chat-quick { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.chat-input { position: sticky; bottom: 0; display: flex; gap: 0.5rem; padding: 0.5rem 0; background: var(--bg); }
+.chat-input input { flex: 1; min-width: 0; font: inherit; padding: 0.65rem 0.8rem; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); }
+.chat-input .btn { border-radius: 999px; }
+.chat-foot { margin: 0; text-align: center; }
+.poster-target { border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.8rem; display: flex; flex-direction: column; gap: 0.4rem; }
+.poster-target legend { font-weight: 650; font-size: 0.9rem; padding: 0 0.25rem; }
