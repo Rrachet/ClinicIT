@@ -39,11 +39,33 @@ export function createDoctor(displayName: string): Promise<{ id: string; display
   return asAdmin("POST", "/api/v1/doctors", { displayName });
 }
 
+/** Whether the API messages patients: on in CI (development provider), possibly off in production. */
+export async function patientMessaging(): Promise<boolean> {
+  return (await asAdmin<{ patientMessaging: boolean }>("GET", "/api/v1/notifications/settings")).patientMessaging;
+}
+
+/**
+ * The desk's notice after a patient joins the queue. With patient messages off, the queue-link
+ * dialog opens at the same moment for staff to share the link; it is closed here.
+ */
+export async function joinedNotice(page: Page, patientName: string): Promise<{ token: string; link: string | null }> {
+  const notice = page.getByRole("status").filter({ hasText: `${patientName} is token #` });
+  await notice.waitFor();
+  const token = (await notice.textContent())!.match(/token #(\d+)/)![1];
+  const dialog = page.getByRole("dialog", { name: `Messages for token #${token}` });
+  let link: string | null = null;
+  if (await dialog.isVisible()) {
+    link = await dialog.getByLabel(/Status link/).inputValue();
+    await dialog.getByRole("button", { name: "Done" }).click();
+  }
+  return { token, link };
+}
+
 /** Registers a patient and books them from the reception console's "New appointment" panel. */
 export async function bookFromReception(
   page: Page,
   options: { patientName: string; doctorName: string; checkInNow: boolean; time?: string },
-) {
+): Promise<{ token: string; link: string | null } | null> {
   await page.getByLabel("Find patient").fill(options.patientName);
   await page.getByRole("button", { name: "+ Register new patient" }).click();
   await page.getByLabel("Phone").fill("90000 11111");
@@ -56,6 +78,7 @@ export async function bookFromReception(
   // Only a later booking has a time; a walk-in is booked for "now" by the server.
   if (options.time) await page.getByLabel("Time", { exact: true }).fill(options.time);
   await page.getByRole("button", { name: options.checkInNow ? "Book and add to queue" : "Book appointment" }).click();
+  return options.checkInNow ? joinedNotice(page, options.patientName) : null;
 }
 
 export async function signIn(page: Page, email: string, password: string) {
