@@ -8,6 +8,11 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Spring Boot 4 is a framework migration (Jakarta/Security/Hibernate changes), done as
+      # its own piece of work rather than a dependency bump.
+      - dependency-name: org.springframework.boot:spring-boot-starter-parent
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: npm
     directory: /frontend
     schedule:
@@ -16,11 +21,26 @@ updates:
     groups:
       minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # typescript-eslint and eslint-config-next do not support TypeScript 7 / ESLint 10 yet.
+      - dependency-name: typescript
+        update-types: ["version-update:semver-major"]
+      - dependency-name: eslint
+        update-types: ["version-update:semver-major"]
+      # Node types follow the Node.js version the app runs on (22, see the CI workflow).
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: pip
     directory: /ml
     schedule:
       interval: monthly
     open-pull-requests-limit: 3
+    ignore:
+      # numpy 2.5+ and scipy 1.18+ need Python 3.12; the ML service runs Python 3.11.
+      - dependency-name: numpy
+        versions: [">=2.5"]
+      - dependency-name: scipy
+        versions: [">=1.18"]
   - package-ecosystem: github-actions
     directory: /
     schedule:
