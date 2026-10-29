@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { e2eState, signIn } from "./state";
+import { e2eState, joinedNotice, patientMessaging, signIn } from "./state";
 
 /**
  * The Phase 5 vertical slice, against the real backend:
@@ -51,10 +51,13 @@ test("receptionist and doctor run one patient through the clinic, live", async (
   await expect(row.getByText("Arrived")).toBeVisible();
   await row.getByRole("button", { name: `Add to queue: ${patientName}` }).click();
 
-  // Joining issues a token; the queue link goes to the patient automatically (Phase 6).
-  const notice = reception.getByRole("status").filter({ hasText: "The queue link is being sent to them." });
-  await expect(notice).toContainText(`${patientName} is token #`);
-  const tokenText = (await notice.textContent())!.match(/token #(\d+)/)![1];
+  // Joining issues a token. The queue link goes to the patient automatically (Phase 6), or,
+  // with patient messages off, the desk is told to share it and the link opens for them.
+  const messaging = await patientMessaging();
+  const { token: tokenText } = await joinedNotice(reception, patientName);
+  await expect(reception.getByRole("status").filter({ hasText: `${patientName} is token #${tokenText}.` })).toContainText(
+    messaging ? "The queue link is being sent to them." : "Messages are off, so give them their queue link.",
+  );
   await expect(row.getByText("Waiting")).toBeVisible();
   await expect(row.getByText(`#${tokenText}`)).toBeVisible();
 

@@ -1,5 +1,5 @@
 import { expect, test, type Browser } from "@playwright/test";
-import { bookFromReception, createDoctor, e2eState, signIn } from "./state";
+import { bookFromReception, createDoctor, e2eState, patientMessaging, signIn } from "./state";
 
 async function receptionPage(browser: Browser) {
   const state = e2eState();
@@ -17,22 +17,33 @@ test("walk-in: one click books, checks in and queues; the patient follows along 
   const { context, page: reception, state } = await receptionPage(browser);
   const patientName = `Walk In ${state.run}`;
 
-  await bookFromReception(reception, { patientName, doctorName: walkInDoctor.displayName, checkInNow: true });
+  const messaging = await patientMessaging();
+  const joined = (await bookFromReception(reception, { patientName, doctorName: walkInDoctor.displayName, checkInNow: true }))!;
+  const token = joined.token;
+  const notice = reception.getByRole("status").filter({ hasText: `${patientName} is token #${token}.` });
 
-  // No dialog to copy from: the patient is messaged the link automatically.
-  const notice = reception.getByRole("status").filter({ hasText: "The queue link is being sent to them." });
-  await expect(notice).toContainText(`${patientName} is token #`);
-  const token = (await notice.textContent())!.match(/token #(\d+)/)![1];
-
-  // Reception can see what was sent. The development provider records instead of sending.
+  let link: string;
   await reception.getByRole("row").filter({ hasText: patientName }).getByRole("button", { name: `Messages: ${patientName}` }).click();
   const messages = reception.getByRole("dialog", { name: `Messages for token #${token}` });
-  const queueLink = messages.getByRole("listitem").filter({ hasText: "Queue link" });
-  await expect(queueLink).toContainText("Sent");
-  await expect(queueLink).toContainText(/SMS to •••\d{4}/);
-  const link = await messages.getByLabel(/Status link/).inputValue();
-  await expect(queueLink).toContainText(`Your token is #${token}. Follow your place in the queue: ${link}`);
-  await expect(queueLink).not.toContainText(patientName);
+  if (messaging) {
+    // No dialog to copy from: the patient is messaged the link automatically, and reception can
+    // see what was sent. The development provider records instead of sending.
+    await expect(notice).toContainText("The queue link is being sent to them.");
+    const queueLink = messages.getByRole("listitem").filter({ hasText: "Queue link" });
+    await expect(queueLink).toContainText("Sent");
+    await expect(queueLink).toContainText(/SMS to •••\d{4}/);
+    link = await messages.getByLabel(/Status link/).inputValue();
+    await expect(queueLink).toContainText(`Your token is #${token}. Follow your place in the queue: ${link}`);
+    await expect(queueLink).not.toContainText(patientName);
+  } else {
+    // Messages off: the desk is never told the link was sent; the link opened for them to share.
+    await expect(notice).toContainText("Messages are off, so give them their queue link.");
+    await expect(reception.getByText(/being sent/)).toHaveCount(0);
+    expect(joined.link).not.toBeNull();
+    await expect(messages).toContainText("switched off for this clinic");
+    link = await messages.getByLabel(/Status link/).inputValue();
+    expect(link).toBe(joined.link);
+  }
   await messages.getByRole("button", { name: "Done" }).click();
 
   // Anonymous patient on a phone: no login, no staff data.
@@ -51,11 +62,13 @@ test("walk-in: one click books, checks in and queues; the patient follows along 
   // The patient page polls; no refresh by the user.
   await expect(patient.getByRole("heading", { name: "It's your turn" })).toBeVisible({ timeout: 25_000 });
 
-  // ...and they were messaged too.
-  await reception.getByRole("row").filter({ hasText: patientName }).getByRole("button", { name: `Messages: ${patientName}` }).click();
-  await expect(
-    reception.getByRole("dialog").getByRole("listitem").filter({ hasText: "Your turn" }),
-  ).toContainText(`token #${token}, it's your turn. Please go in now.`);
+  // ...and, when the clinic messages patients, they were messaged too.
+  if (messaging) {
+    await reception.getByRole("row").filter({ hasText: patientName }).getByRole("button", { name: `Messages: ${patientName}` }).click();
+    await expect(
+      reception.getByRole("dialog").getByRole("listitem").filter({ hasText: "Your turn" }),
+    ).toContainText(`token #${token}, it's your turn. Please go in now.`);
+  }
 
   expect(publicRequests.some((url) => url.includes("/api/v1/public/queue-status/"))).toBe(true);
   expect(publicRequests.some((url) => url.includes("/ws") || url.includes("/api/v1/queues"))).toBe(false);

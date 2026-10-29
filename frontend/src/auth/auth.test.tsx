@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { apiError, fakeApi } from "@/test/fakeApi";
@@ -6,7 +6,8 @@ import { session, user } from "@/test/fixtures";
 import { navigationMock, router, searchParams } from "@/test/navigation";
 import { renderWithAuth } from "@/test/render";
 import { useEffect } from "react";
-import { useAuth } from "./AuthProvider";
+import { AuthProvider, useAuth } from "./AuthProvider";
+import { sessionStore } from "./sessionStore";
 import { LoginScreen } from "./LoginScreen";
 import { RequireRole } from "./RequireRole";
 import { loadSession } from "./session";
@@ -103,6 +104,24 @@ describe("authentication", () => {
     // Every redirect, including RequireRole's own once the session is gone, says why.
     expect(router.replace.mock.calls.map(([to]) => to)).not.toContain("/login");
     expect(router.replace).toHaveBeenLastCalledWith("/login?reason=expired");
+  });
+
+  it("still says why after a reload, once the session ended, but not after signing out", async () => {
+    sessionStorage.setItem("clinicit.sessionEnded", "expired");
+    sessionStore.resetForTests();
+    render(
+      <AuthProvider apiBaseUrl="http://api.test">
+        <RequireRole area="reception">
+          <p>secret console</p>
+        </RequireRole>
+      </AuthProvider>,
+    );
+    await waitFor(() => expect(router.replace).toHaveBeenCalledWith("/login?reason=expired"));
+
+    sessionStore.set(session("RECEPTIONIST"));
+    sessionStore.set(null);
+    expect(sessionStorage.getItem("clinicit.sessionEnded")).toBeNull();
+    expect(sessionStore.endReason()).toBeNull();
   });
 
   it("redirects a doctor who opens the reception console to their own screen", async () => {
