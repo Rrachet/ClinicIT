@@ -1,0 +1,31 @@
+name: Bug report
+description: Something is not working as expected
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Please never paste real patient names, phone numbers or other health information into an issue.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: "1. Sign in as ...\n2. Go to ...\n3. Click ...\n4. See ..."
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options: [Self check-in, Patient status page, Doctor screen, Admin or front desk, Analytics, API, ML service, Deployment, Other]
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: e.g. Android phone, Chrome

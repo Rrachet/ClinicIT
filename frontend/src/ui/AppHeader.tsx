@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useAuth } from "@/auth/AuthProvider";
 import type { FeedStatus } from "@/realtime/queueFeed";
 import { longDate } from "./format";
+import { BrandMark } from "@/ui/BrandMark";
 
 const FEED_TEXT: Record<FeedStatus, string> = {
   connecting: "Connecting…",
@@ -29,7 +30,9 @@ export function AppHeader({ title, clinicName, day, feed }: { title: string; cli
   return (
     <header className="app-header">
       <div className="app-header-left">
-        <span className="brand">ClinicIT</span>
+        <span className="brand">
+          <BrandMark /> ClinicIT
+        </span>
         <span className="app-title">{title}</span>
         {clinicName ? <span className="muted">{clinicName}</span> : null}
         {day ? <span className="muted">{longDate(day)}</span> : null}

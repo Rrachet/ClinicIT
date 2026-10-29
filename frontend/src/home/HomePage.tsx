@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { HomeActions } from "./HomeActions";
+import { BrandMark } from "@/ui/BrandMark";
 
 const PATIENT_STEPS = [
   {
@@ -98,7 +99,7 @@ export function HomePage() {
     <div className="home">
       <header className="home-nav">
         <Link href="/" className="brand home-brand">
-          ClinicIT
+          <BrandMark size={28} /> ClinicIT
         </Link>
         <nav aria-label="Home sections" className="home-nav-links">
           <a href="#how-it-works">How it works</a>
@@ -281,7 +282,9 @@ export function HomePage() {
       </main>
 
       <footer className="home-footer">
-        <span className="brand">ClinicIT</span>
+        <span className="brand">
+          <BrandMark /> ClinicIT
+        </span>
         <span className="muted small">Patients: scan the check-in QR code in your clinic to join the queue.</span>
       </footer>
     </div>
