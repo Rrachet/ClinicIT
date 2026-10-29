@@ -36,6 +36,17 @@ clinicit:
     max-failures-per-ip: 30
     # Purge of expired/revoked sessions and stale throttle rows.
     cleanup-interval: PT1H
+  # AI receptionist on the clinic's QR code (docs/AI_RECEPTIONIST.md). Off without an API key.
+  receptionist:
+    api-key: ${ANTHROPIC_API_KEY:}
+    model: ${CLINICIT_RECEPTIONIST_MODEL:claude-opus-5-5}
+    effort: ${CLINICIT_RECEPTIONIST_EFFORT:low}
+    max-user-turns: 30
+    max-message-chars: 500
+    retention: P1D
+    rate-limit:
+      window: PT10M
+      max-per-ip: 80
   notifications:
     enabled: ${CLINICIT_NOTIFICATIONS_ENABLED:true}
     # "development" records messages instead of sending them. A real SMS/WhatsApp/email

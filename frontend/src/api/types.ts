@@ -64,6 +64,31 @@ export interface PublicCheckIn {
   visitTypes: { id: string; name: string; description: string | null; available: boolean }[];
 }
 
+/** The AI receptionist chat on the clinic's QR code (docs/AI_RECEPTIONIST.md). */
+export interface ReceptionistInfo {
+  clinicName: string;
+  /** False when the clinic has no AI receptionist switched on: use the check-in form. */
+  enabled: boolean;
+  greeting: string;
+}
+
+/** Something the receptionist did: a place in today's queue, or a booking. */
+export interface ReceptionistAction {
+  type: "QUEUED" | "BOOKED";
+  statusCode: string | null;
+  tokenNumber: number | null;
+  doctorName: string | null;
+  room: string | null;
+  /** Clinic-local "YYYY-MM-DDTHH:mm:ss" for a booking. */
+  startsAt: string | null;
+}
+
+export interface ReceptionistReply {
+  conversationId: string | null;
+  reply: string;
+  actions: ReceptionistAction[];
+}
+
 export interface SelfCheckInResult {
   statusCode: string;
   tokenNumber: number;

@@ -13,8 +13,10 @@ vi.mock("next/navigation", () => navigationMock);
 describe("CheckInAdmin", () => {
   let api: ReturnType<typeof fakeApi>;
   let visitTypes: VisitType[];
+  let receptionistOn: boolean;
   beforeEach(() => {
     visitTypes = [];
+    receptionistOn = false;
     api = fakeApi()
       .route("GET /api/v1/clinic", () => ({ body: { ...CLINIC, checkInCode: "abc123def456" } }))
       .route("GET /api/v1/doctors", () => ({
@@ -23,7 +25,10 @@ describe("CheckInAdmin", () => {
           { ...MEHTA, live: false, room: null },
         ],
       }))
-      .route("GET /api/v1/visit-types", () => ({ body: visitTypes }));
+      .route("GET /api/v1/visit-types", () => ({ body: visitTypes }))
+      .route("GET /api/v1/public/receptionist/abc123def456", () => ({
+        body: { clinicName: CLINIC.name, enabled: receptionistOn, greeting: "Hello!" },
+      }));
     vi.stubGlobal("fetch", api.fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
@@ -34,6 +39,16 @@ describe("CheckInAdmin", () => {
     expect(screen.getByLabelText("Check-in link")).toHaveValue("http://localhost:3000/check-in/abc123def456");
     await waitFor(() => expect(screen.getByRole("img", { name: "Check-in QR code" }).querySelector("svg")).not.toBeNull());
     expect(screen.getByText("Add at least one visit type below.", { exact: false })).toBeInTheDocument();
+  });
+
+  it("points the poster at the AI receptionist chat when it is switched on, or at the form", async () => {
+    receptionistOn = true;
+    renderWithAuth(<CheckInAdmin />, { session: session("ADMIN") });
+    expect(await screen.findByRole("heading", { name: "Scan to talk to reception" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Check-in link")).toHaveValue("http://localhost:3000/talk/abc123def456");
+    await userEvent.click(screen.getByRole("radio", { name: /The check-in form/ }));
+    expect(screen.getByRole("heading", { name: "Scan to check in" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Check-in link")).toHaveValue("http://localhost:3000/check-in/abc123def456");
   });
 
   it("adds a visit type seen by chosen doctors", async () => {

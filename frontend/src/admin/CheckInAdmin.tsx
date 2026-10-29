@@ -12,10 +12,12 @@ import { ErrorBanner, Notice } from "@/ui/Feedback";
 import { FullPageSpinner } from "@/ui/Spinner";
 import { useAsync } from "@/ui/useAsync";
 
-/** The public page a patient opens from the clinic's QR code. */
-export function checkInUrl(code: string, origin: string = window.location.origin): string {
-  return `${origin}/check-in/${code}`;
+/** The public page a patient opens from the clinic's QR code: the check-in form or the AI receptionist chat. */
+export function checkInUrl(code: string, target: PosterTarget = "form", origin: string = window.location.origin): string {
+  return `${origin}/${target === "chat" ? "talk" : "check-in"}/${code}`;
 }
+
+type PosterTarget = "chat" | "form";
 
 /**
  * Self check-in setup: the QR code to print for the waiting area, the visit types patients
@@ -24,6 +26,11 @@ export function checkInUrl(code: string, origin: string = window.location.origin
 export function CheckInAdmin() {
   const { api } = useAuth();
   const data = useAsync(useCallback(() => Promise.all([api.clinic(), api.doctors(), api.visitTypes()]), [api]));
+  const code = data.data?.[0].checkInCode;
+  const receptionist = useAsync(
+    useCallback(() => (code ? api.receptionist(code).catch(() => null) : Promise.resolve(null)), [api, code]),
+  );
+  const chatEnabled = receptionist.data?.enabled === true;
 
   if (!data.data) {
     return data.error ? (
@@ -41,7 +48,7 @@ export function CheckInAdmin() {
     <>
       <AppHeader title="Self check-in" clinicName={clinic.name} />
       <main className="page stack">
-        {clinic.checkInCode ? <QrPoster clinicName={clinic.name} code={clinic.checkInCode} /> : null}
+        {clinic.checkInCode ? <QrPoster clinicName={clinic.name} code={clinic.checkInCode} chatEnabled={chatEnabled} /> : null}
         {visitTypes.filter((t) => t.active).length === 0 ? (
           <Notice>Add at least one visit type below. Patients can only check in for an active visit type.</Notice>
         ) : null}
@@ -53,8 +60,10 @@ export function CheckInAdmin() {
   );
 }
 
-function QrPoster({ clinicName, code }: { clinicName: string; code: string }) {
-  const url = checkInUrl(code);
+function QrPoster({ clinicName, code, chatEnabled }: { clinicName: string; code: string; chatEnabled: boolean }) {
+  const [choice, setChoice] = useState<PosterTarget | null>(null);
+  const target: PosterTarget = choice ?? (chatEnabled ? "chat" : "form");
+  const url = checkInUrl(code, target);
   const [svg, setSvg] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   useEffect(() => {
@@ -73,7 +82,7 @@ function QrPoster({ clinicName, code }: { clinicName: string; code: string }) {
       <div className="qr-poster">
         <p className="qr-clinic">{clinicName}</p>
         <h2 id="qr-title" className="qr-title">
-          Scan to check in
+          {target === "chat" ? "Scan to talk to reception" : "Scan to check in"}
         </h2>
         {svg ? (
           // Generated locally from our own URL; no user input reaches the markup.
@@ -81,10 +90,31 @@ function QrPoster({ clinicName, code }: { clinicName: string; code: string }) {
         ) : (
           <div className="qr-code" />
         )}
-        <p className="qr-steps">Enter your name and number, choose your visit, and follow your place in the queue on your phone.</p>
+        <p className="qr-steps">
+          {target === "chat"
+            ? "Chat to check in now or book a time. Then follow your place in the queue on your phone."
+            : "Enter your name and number, choose your visit, and follow your place in the queue on your phone."}
+        </p>
         <p className="qr-emergency">Emergency? Tell clinic staff now or call 112.</p>
       </div>
       <div className="qr-tools">
+        <fieldset className="poster-target">
+          <legend>The QR code opens</legend>
+          <label className="check">
+            <input
+              type="radio"
+              name="poster-target"
+              checked={target === "chat"}
+              disabled={!chatEnabled}
+              onChange={() => setChoice("chat")}
+            />
+            The AI receptionist chat {chatEnabled ? "(patients check in or book a time)" : "(switched off: no API key set)"}
+          </label>
+          <label className="check">
+            <input type="radio" name="poster-target" checked={target === "form"} onChange={() => setChoice("form")} />
+            The check-in form (patients who are here now)
+          </label>
+        </fieldset>
         <label className="field">
           <span>Check-in link</span>
           <input className="link-box" value={url} readOnly onFocus={(e) => e.target.select()} />
@@ -102,7 +132,7 @@ function QrPoster({ clinicName, code }: { clinicName: string; code: string }) {
             {copied ? "Copied" : "Copy link"}
           </Button>
           <a className="btn btn-md" href={url} target="_blank" rel="noreferrer">
-            Open check-in page
+            {target === "chat" ? "Open the chat" : "Open check-in page"}
           </a>
         </div>
       </div>

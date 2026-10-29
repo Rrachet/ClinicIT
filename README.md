@@ -84,6 +84,9 @@ sequenceDiagram
   patient writes is only shown to the doctor. Nothing about their health is inferred.
 - **One place per patient per day.** Scanning again returns the same token, never a second one.
 - **Live is per day.** A doctor who forgets to go offline is not live tomorrow; the admin can also take them offline.
+- **Or just chat.** With the AI receptionist on, the QR code opens a chat instead: "my son has a fever, can we come
+  tomorrow evening?" gets real free slots and a booking. Bookings show up on the doctor's list; on arrival the patient
+  scans again and joins the queue ([AI_RECEPTIONIST.md](docs/AI_RECEPTIONIST.md)).
 - **A front desk is optional.** Reception tools stay available to book ahead, add patients without a phone, and fix
   anything by hand.
 
@@ -111,7 +114,9 @@ All screenshots show the fictional [demo clinic](docs/DEMO.md).
 ## Features
 
 ### Patients
-- **QR self check-in** from their own phone: name, phone, visit type and an optional note for the doctor
+- **AI receptionist chat** on the QR code: patients write in their own words and language, and Claude checks them in
+  or books a free slot, only through ClinicIT's own rules ([AI_RECEPTIONIST.md](docs/AI_RECEPTIONIST.md))
+- **QR self check-in form** from their own phone: name, phone, visit type and an optional note for the doctor
 - A clear **"Not for emergencies"** notice on the check-in page
 - A live status page: token, token being served, people ahead and an **approximate wait range**
 - **"It's your turn, go to Room 3"** in large type, with optional sound and vibration
@@ -159,7 +164,7 @@ flowchart LR
   API -.->|0.8 s budget, fallback if down| ML
 ```
 
-A **modular monolith** in Java 21: `identity`, `clinic`, `patient`, `appointment`, `checkin`, `queue`, `schedule`,
+A **modular monolith** in Java 21: `identity`, `clinic`, `patient`, `appointment`, `checkin`, `receptionist`, `queue`, `schedule`,
 `realtime`, `notification`, `history`, `analytics`, `prediction`, `noshow`. PostgreSQL is the only store: no Redis,
 no message broker, no microservices.
 
@@ -206,6 +211,7 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DATA_MODEL.md](do
 | API | Java 21, Spring Boot 3.5 (Web, Security, Data JPA, JDBC, WebSocket/STOMP, Actuator, Micrometer), Flyway |
 | Database | PostgreSQL 16+, 14 versioned migrations, row locks, partial unique indexes, append-only history |
 | Web app | Next.js 16 (App Router), React 19, TypeScript strict, a small hand-written design system, QR codes in the browser |
+| AI receptionist | Claude (Anthropic Java SDK, Messages API with strict client tools, prompt caching, server-side fallbacks) |
 | ML | Python 3.11, FastAPI, scikit-learn; a versioned JSON contract with the API |
 | Hosting | Vercel (web app and API container), Supabase PostgreSQL; Docker images for every service |
 | Testing | JUnit 5 against real PostgreSQL, Vitest + Testing Library, pytest, Playwright end to end |
@@ -224,6 +230,8 @@ More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DATA_MODEL.md](do
 
 ClinicIT is an **operational** system, not a clinical one. It never diagnoses, prescribes, reorders patients by
 condition or refuses care. The doctor is chosen from the visit type the patient picks, never from what they write.
+The AI receptionist books and checks in only through ClinicIT's own tools and rules, never gives medical advice, and
+sends anything that sounds urgent straight to clinic staff or 112.
 Wait estimates and the no-show flag are advisory and labelled that way ([AI.md](docs/AI.md),
 [NO_SHOW_RISK.md](docs/NO_SHOW_RISK.md)).
 
@@ -285,6 +293,7 @@ src/main/java/com/clinicit/
   identity/        sessions, roles, staff accounts, security configuration
   clinic/          clinic, doctors, live status and rooms
   checkin/         QR self check-in, visit types, doctor matching
+  receptionist/    the AI receptionist: Claude tool loop, booking tools, transcripts
   patient/         patients
   appointment/     appointments and their lifecycle
   queue/           the queue engine, tokens, public status

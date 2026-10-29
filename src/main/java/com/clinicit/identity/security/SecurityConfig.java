@@ -61,6 +61,9 @@ public class SecurityConfig implements WebMvcConfigurer {
                         // Self check-in from the clinic's QR code (docs/SELF_CHECK_IN.md); rate limited.
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/check-in/*").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/public/check-in/*").permitAll()
+                        // AI receptionist chat from the same QR code (docs/AI_RECEPTIONIST.md); rate limited.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/receptionist/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/public/receptionist/*/messages").permitAll()
                         .requestMatchers("/error").permitAll()
                         // Probes and metrics. Actuator is served only on the internal management
                         // port (management.server.port); on the public port these paths have no

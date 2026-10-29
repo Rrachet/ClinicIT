@@ -21,6 +21,12 @@
     </properties>
 
     <dependencies>
+        <!-- Claude API: the AI receptionist on the self check-in QR code (docs/AI_RECEPTIONIST.md). -->
+        <dependency>
+            <groupId>com.anthropic</groupId>
+            <artifactId>anthropic-java</artifactId>
+            <version>3.2.0</version>
+        </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>

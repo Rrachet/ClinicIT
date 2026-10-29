@@ -47,6 +47,14 @@ See [SELF_CHECK_IN.md](SELF_CHECK_IN.md).
 - POST /api/v1/public/check-in/{code}  (public, rate limited) `{ fullName, phone, visitTypeId, reason? }` →
   `{ statusCode, tokenNumber, doctorName, room, alreadyCheckedIn }`; 409 `NO_DOCTOR_AVAILABLE`
 
+## AI receptionist
+
+See [AI_RECEPTIONIST.md](AI_RECEPTIONIST.md).
+
+- GET  /api/v1/public/receptionist/{code}              (public, rate limited) `{ clinicName, enabled, greeting }`
+- POST /api/v1/public/receptionist/{code}/messages     (public, rate limited) `{ conversationId?, message }` →
+  `{ conversationId, reply, actions }`; 503 `RECEPTIONIST_UNAVAILABLE` when off or unreachable
+
 ## Doctor schedules (Phase 10)
 
 Scheduling rules and refusal codes: [SCHEDULING.md](SCHEDULING.md).
