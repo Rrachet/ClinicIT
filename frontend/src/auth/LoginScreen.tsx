@@ -9,6 +9,7 @@ import { Button } from "@/ui/Button";
 import { ErrorBanner, Notice } from "@/ui/Feedback";
 import { useAuth } from "./AuthProvider";
 import { homeFor } from "./routing";
+import { BrandMark } from "@/ui/BrandMark";
 
 export function LoginScreen({ apiConfigured = API_CONFIGURED }: { apiConfigured?: boolean }) {
   const { login, session } = useAuth();
@@ -46,7 +47,7 @@ export function LoginScreen({ apiConfigured = API_CONFIGURED }: { apiConfigured?
     <main className="login">
       <form className="login-card" onSubmit={submit} aria-labelledby="login-title">
         <Link href="/" className="brand login-brand">
-          ClinicIT
+          <BrandMark size={26} /> ClinicIT
         </Link>
         <h1 id="login-title">Sign in</h1>
         {reason === "expired" ? <Notice>Your session ended. Please sign in again.</Notice> : null}

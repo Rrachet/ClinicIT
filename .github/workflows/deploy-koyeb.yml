@@ -20,7 +20,7 @@ jobs:
       DB_PASSWORD: ${{ secrets.CLINICIT_DB_PASSWORD }}
       BOOTSTRAP_ADMIN_EMAIL: ${{ secrets.CLINICIT_BOOTSTRAP_ADMIN_EMAIL }}
       BOOTSTRAP_ADMIN_PASSWORD: ${{ secrets.CLINICIT_BOOTSTRAP_ADMIN_PASSWORD }}
-      API_APP_URL: https://clinic-it-kappa.vercel.app
+      API_APP_URL: https://clinicit.vercel.app
       DB_URL: jdbc:postgresql://ep-silent-dawn-b4qphwvl.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require
     steps:
       - name: Validate required secrets

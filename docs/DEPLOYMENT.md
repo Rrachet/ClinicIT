@@ -4,10 +4,13 @@
 
 | Piece | Where | URL / location |
 |---|---|---|
-| Web app | Vercel project `clinic-it` (root `frontend/`, Next.js) | https://clinic-it-kappa.vercel.app |
-| API | Vercel project `clinic-it-api` (root `Dockerfile`, Container Runtime, region `hnd1`) | https://clinic-it-api.vercel.app |
+| Web app | Vercel project `clinic-it` (root `frontend/`, Next.js) | https://clinicit.vercel.app |
+| API | Vercel project `clinic-it-api` (root `Dockerfile`, Container Runtime, region `hnd1`) | https://clinicit-api.vercel.app |
 | Database | Supabase project "Rrachet's Project" (Tokyo), private schema `clinicit`, role `clinicit` | Supavisor pooler, `aws-0-ap-northeast-1` |
 | ML service | not deployed; the deterministic wait-time baseline is used | – |
+
+The earlier addresses `clinic-it-kappa.vercel.app` and `clinic-it-api.vercel.app` still point at the same
+deployments, so old links keep working.
 
 How it fits together, and why:
 
@@ -30,11 +33,11 @@ How it fits together, and why:
 - **API variables** (project `clinic-it-api`, Production): `SPRING_PROFILES_ACTIVE=prod`, `PORT=8080`, `DB_URL`,
   `DB_USERNAME` (`clinicit.<project-ref>`), `DB_PASSWORD` (sensitive), `DB_POOL_SIZE=3`,
   `SPRING_DATASOURCE_HIKARI_MINIMUM_IDLE=1`, `SPRING_DATASOURCE_HIKARI_IDLE_TIMEOUT=30000`, the three
-  `SPRING_FLYWAY_*`, `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL`
-  (`https://clinic-it-kappa.vercel.app`), `CLINICIT_NOTIFICATIONS_ENABLED=false`,
+  `SPRING_FLYWAY_*`, `CLINICIT_CORS_ALLOWED_ORIGINS` (`https://clinicit.vercel.app,https://clinic-it-kappa.vercel.app`),
+  `CLINICIT_PUBLIC_APP_URL` (`https://clinicit.vercel.app`), `CLINICIT_NOTIFICATIONS_ENABLED=false`,
   `CLINICIT_NOTIFICATIONS_PROVIDER=none`, `CLINICIT_REALTIME_RELAY_ENABLED=true`, the proxy setting above, and the
   first-start `CLINICIT_BOOTSTRAP_*` values.
-- **Web app variable** (project `clinic-it`, Production and Preview): `NEXT_PUBLIC_API_BASE_URL=https://clinic-it-api.vercel.app`.
+- **Web app variable** (project `clinic-it`, Production and Preview): `NEXT_PUBLIC_API_BASE_URL=https://clinicit-api.vercel.app`.
   Redeploy the web app after changing it.
 
 Limits of this free setup: Vercel Hobby is for non-commercial use, and its monthly function allowances apply (when
@@ -99,7 +102,7 @@ The repository includes [`.github/workflows/deploy-koyeb.yml`](../.github/workfl
 4. Open **Actions → Bootstrap ClinicIT API on Koyeb → Run workflow**. It uses the existing Neon project/production branch, deploys the root `Dockerfile`, exposes only port 8080, limits the service to one instance, disables notifications, and leaves the optional ML service off.
 5. When the workflow succeeds, copy the exact API URL from the workflow summary. If it fails, inspect its step output and the Koyeb build/runtime logs before rerunning. Do not repeatedly run the bootstrap workflow after a partial failure without checking whether the Koyeb app/service already exists.
 
-The workflow uses the existing production frontend origin `https://clinic-it-kappa.vercel.app` for CORS and patient status links. If you change the frontend domain, update the API's `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL` to that exact origin.
+The workflow uses the existing production frontend origin `https://clinicit.vercel.app` for CORS and patient status links. If you change the frontend domain, update the API's `CLINICIT_CORS_ALLOWED_ORIGINS` and `CLINICIT_PUBLIC_APP_URL` to that exact origin.
 
 ### Manual alternative
 
@@ -111,7 +114,7 @@ The workflow uses the existing production frontend origin `https://clinic-it-kap
 |---|---|
 | `SPRING_PROFILES_ACTIVE` | `prod` |
 | `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` | from the existing Neon production branch (a development password is refused) |
-| `CLINICIT_CORS_ALLOWED_ORIGINS` | the web app's exact origin, e.g. `https://clinic-it-kappa.vercel.app` (https, no wildcards) |
+| `CLINICIT_CORS_ALLOWED_ORIGINS` | the web app's exact origin, e.g. `https://clinicit.vercel.app` (https, no wildcards) |
 | `CLINICIT_PUBLIC_APP_URL` | the same origin: patients' status links are `{this}/status/{code}` |
 | `CLINICIT_NOTIFICATIONS_ENABLED` / `CLINICIT_NOTIFICATIONS_PROVIDER` | `false` / `none` (no real SMS provider ships yet) |
 | `CLINICIT_ML_BASE_URL` | optional: the ML service's private URL (step 4) |
