@@ -19,6 +19,7 @@ describe("DoctorConsole", () => {
     FakeStompClient.reset();
     api = fakeApi()
       .route("GET /api/v1/clinic", () => ({ body: CLINIC }))
+      .route("GET /api/v1/doctors", () => ({ body: [{ ...SHARMA, live: false, room: "Room 3" }] }))
       .route("GET /api/v1/appointments", () => ({
         body: [appointment({ id: "a", patientName: "Asha Rao", status: "WAITING", reasonSummary: "Fever", scheduledAt: `${CLINIC.today}T10:15:00` })],
       }))
@@ -42,6 +43,25 @@ describe("DoctorConsole", () => {
     act(() => client.connect());
     return client;
   }
+
+  it("goes live with a room so self check-in can send patients, and back offline", async () => {
+    api.route(`PUT /api/v1/doctors/${SHARMA.id}/duty`, ({ body }) => ({
+      body: { ...SHARMA, live: (body as { live: boolean }).live, room: (body as { room: string }).room },
+    }));
+    await open();
+    expect(await screen.findByText("You're offline")).toBeInTheDocument();
+    const room = screen.getByLabelText("Room");
+    expect(room).toHaveValue("Room 3");
+    await userEvent.clear(room);
+    await userEvent.type(room, "Room 7");
+    await userEvent.click(screen.getByRole("button", { name: "Go live" }));
+    expect(await screen.findByText("You're live")).toBeInTheDocument();
+    expect(api.callsTo("PUT", `/api/v1/doctors/${SHARMA.id}/duty`)[0].body).toEqual({ live: true, room: "Room 7" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Go offline" }));
+    expect(await screen.findByText("You're offline")).toBeInTheDocument();
+    expect(api.callsTo("PUT", `/api/v1/doctors/${SHARMA.id}/duty`)[1].body).toEqual({ live: false, room: "Room 7" });
+  });
 
   it("follows only the doctor's own topic and own board", async () => {
     const client = await open();

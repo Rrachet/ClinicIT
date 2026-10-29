@@ -87,7 +87,16 @@ public class QueueService {
 
     /** Puts an ARRIVED appointment into today's queue and issues its token. */
     public QueueEntryResponse join(Actor actor, UUID appointmentId) {
-        Appointment appointment = appointments.findByIdAndClinicIdForUpdate(appointmentId, actor.clinicId())
+        return join(actor.clinicId(), actor, appointmentId);
+    }
+
+    /** A patient who checked themselves in: no staff member acts (docs/SELF_CHECK_IN.md). */
+    public QueueEntryResponse joinSelfCheckIn(UUID clinicId, UUID appointmentId) {
+        return join(clinicId, null, appointmentId);
+    }
+
+    private QueueEntryResponse join(UUID clinicId, Actor actor, UUID appointmentId) {
+        Appointment appointment = appointments.findByIdAndClinicIdForUpdate(appointmentId, clinicId)
                 .orElseThrow(() -> new NotFoundException("Appointment not found"));
 
         // Fail before touching the token counter.

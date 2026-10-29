@@ -11,6 +11,8 @@ public interface PatientRepository extends JpaRepository<Patient, UUID> {
 
     Optional<Patient> findByIdAndClinicId(UUID id, UUID clinicId);
 
+    Optional<Patient> findFirstByClinicIdAndPhoneAndFullNameIgnoreCase(UUID clinicId, String phone, String fullName);
+
     List<Patient> findByClinicIdAndIdIn(UUID clinicId, Collection<UUID> ids);
 
     List<Patient> findTop20ByClinicIdAndFullNameContainingIgnoreCaseOrderByFullNameAsc(

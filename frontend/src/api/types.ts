@@ -26,6 +26,8 @@ export interface Clinic {
   name: string;
   timezone: string;
   today: string;
+  /** Public code in the clinic's self check-in QR code: /check-in/{code}. */
+  checkInCode?: string;
 }
 
 export interface Doctor {
@@ -35,6 +37,40 @@ export interface Doctor {
   specialization: string | null;
   /** Length of one appointment slot (minutes). */
   appointmentMinutes?: number;
+  /** Seeing patients today; self check-in only sends patients to live doctors. */
+  live?: boolean;
+  liveSince?: string | null;
+  /** Where patients go when called, e.g. "Room 3". */
+  room?: string | null;
+}
+
+/** Something a patient can come in for; the patient picks it at self check-in. */
+export interface VisitType {
+  id: string;
+  name: string;
+  description: string | null;
+  /** Any live doctor can see it; otherwise only doctorIds. */
+  anyDoctor: boolean;
+  doctorIds: string[];
+  sortOrder: number;
+  active: boolean;
+}
+
+/** The public check-in page for a clinic. No doctor or patient details. */
+export interface PublicCheckIn {
+  clinicName: string;
+  /** At least one doctor is live. */
+  open: boolean;
+  visitTypes: { id: string; name: string; description: string | null; available: boolean }[];
+}
+
+export interface SelfCheckInResult {
+  statusCode: string;
+  tokenNumber: number;
+  doctorName: string;
+  room: string | null;
+  /** They were already in today's queue; this is the same place. */
+  alreadyCheckedIn: boolean;
 }
 
 export type DayOfWeek = "MONDAY" | "TUESDAY" | "WEDNESDAY" | "THURSDAY" | "FRIDAY" | "SATURDAY" | "SUNDAY";
@@ -191,6 +227,8 @@ export interface PublicQueueStatus {
   patientsAhead: number;
   /** Approximate wait before being called, while WAITING (Phase 8). A range, never a promise. */
   estimatedWait: { estimatedWaitMinutes: number; lowerBoundMinutes: number; upperBoundMinutes: number } | null;
+  /** Where to go when called (the doctor's room). */
+  room?: string | null;
 }
 
 export interface ApiErrorBody {

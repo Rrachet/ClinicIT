@@ -27,9 +27,10 @@ describe("statusMessage", () => {
     expect(statusMessage({ ...base, patientsAhead: 0 })).toMatchObject({ tone: "next", headline: "You're next" });
   });
 
-  it("tells a called patient to go in, and a skipped one to see reception", () => {
+  it("tells a called patient where to go, and a skipped one how to rejoin", () => {
     expect(statusMessage({ ...base, status: "CALLED" })).toMatchObject({ tone: "go", detail: "Please go to Dr. Sharma now." });
-    expect(statusMessage({ ...base, status: "SKIPPED" }).detail).toContain("reception");
+    expect(statusMessage({ ...base, status: "CALLED", room: "Room 3" }).detail).toBe("Please go to Room 3 now (Dr. Sharma).");
+    expect(statusMessage({ ...base, status: "SKIPPED" }).detail).toContain("tell the doctor or clinic staff");
   });
 });
 
@@ -40,6 +41,21 @@ describe("PatientStatus page", () => {
     vi.stubGlobal("fetch", api.fetchMock);
   });
   afterEach(() => vi.unstubAllGlobals());
+
+  it("confirms a fresh self check-in, and shows the room in large type once called", async () => {
+    let current: PublicQueueStatus = { ...base, room: "Room 3" };
+    api.route("GET /api/v1/public/queue-status/abcDEF123456789xyz_-", () => ({ body: current }));
+    renderWithAuth(<PatientStatus code="abcDEF123456789xyz_-" justCheckedIn pollMs={20} nearPollMs={20} />);
+    expect(await screen.findByText(/You're checked in/)).toBeInTheDocument();
+    expect(screen.queryByTestId("patient-room")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Alert me with sound and vibration" })).toBeInTheDocument();
+
+    current = { ...current, status: "CALLED", patientsAhead: 0, currentToken: 27 };
+    expect(await screen.findByRole("heading", { name: "It's your turn" })).toBeInTheDocument();
+    expect(screen.getByTestId("patient-room")).toHaveTextContent("Room 3");
+    expect(screen.queryByText(/You're checked in/)).not.toBeInTheDocument();
+    expect(document.title).toBe("Your turn · ClinicIT");
+  });
 
   it("shows the token, now serving and people ahead, without any login", async () => {
     api.route("GET /api/v1/public/queue-status/abcDEF123456789xyz_-", () => ({ body: base }));

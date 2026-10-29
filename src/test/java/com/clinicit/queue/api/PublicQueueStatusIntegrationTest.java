@@ -30,7 +30,9 @@ class PublicQueueStatusIntegrationTest extends PostgresIntegrationTest {
     private static final Set<String> FIELDS = Set.of(
             "clinicName", "doctorName", "queueDate", "tokenNumber", "status", "currentToken", "patientsAhead",
             // Phase 8: an approximate range only (no model details, nothing about the patient).
-            "estimatedWait");
+            "estimatedWait",
+            // Self check-in: the doctor's room, shown when called ("Go to Room 3").
+            "room");
 
     @Autowired MockMvc mvc;
     @Autowired QueueService queue;

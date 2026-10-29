@@ -2,6 +2,7 @@ package com.clinicit.clinic.domain;
 
 import jakarta.persistence.*;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.UUID;
 
 @Entity
@@ -28,6 +29,17 @@ public class DoctorProfile {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** The clinic-local day the doctor went live; live only on that day (docs/SELF_CHECK_IN.md). */
+    @Column(name = "on_duty_date")
+    private LocalDate onDutyDate;
+
+    @Column(name = "on_duty_since")
+    private Instant onDutySince;
+
+    /** Where patients go when called, e.g. "Room 3". */
+    @Column(length = 40)
+    private String room;
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
@@ -43,4 +55,24 @@ public class DoctorProfile {
     public int getAppointmentMinutes() { return appointmentMinutes; }
     public void setAppointmentMinutes(int appointmentMinutes) { this.appointmentMinutes = appointmentMinutes; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getRoom() { return room; }
+    public void setRoom(String room) { this.room = room; }
+    public Instant getOnDutySince() { return onDutySince; }
+
+    /** Seeing patients today: went live today (clinic-local) and has not gone offline. */
+    public boolean isOnDuty(LocalDate today) {
+        return today.equals(onDutyDate);
+    }
+
+    public void goOnDuty(LocalDate today, Instant now) {
+        if (!isOnDuty(today)) {
+            onDutySince = now;
+        }
+        onDutyDate = today;
+    }
+
+    public void goOffDuty() {
+        onDutyDate = null;
+        onDutySince = null;
+    }
 }

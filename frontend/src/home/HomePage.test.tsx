@@ -14,7 +14,7 @@ describe("HomePage", () => {
 
   it("explains the product and offers staff sign-in when signed out", () => {
     renderWithAuth(<HomePage />);
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Run the clinic day");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Run the clinic day without a reception desk");
     expect(screen.getByRole("heading", { name: "How a patient moves through the clinic" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Under the hood" })).toBeInTheDocument();
     const signIns = screen.getAllByRole("link", { name: "Staff sign in" });

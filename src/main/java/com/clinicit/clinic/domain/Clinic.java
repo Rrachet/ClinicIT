@@ -24,9 +24,21 @@ public class Clinic {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    /** Public code in the clinic's check-in QR code: /check-in/{code}. */
+    @Column(name = "check_in_code", nullable = false, length = 32, unique = true)
+    private String checkInCode;
+
     @PrePersist
     void onCreate() {
         createdAt = Instant.now();
+        if (checkInCode == null) {
+            checkInCode = newCheckInCode();
+        }
+    }
+
+    /** 128 random bits, URL-safe: a printed code cannot be guessed from another clinic's. */
+    public static String newCheckInCode() {
+        return UUID.randomUUID().toString().replace("-", "");
     }
 
     public UUID getId() { return id; }
@@ -37,4 +49,6 @@ public class Clinic {
     public String getTimezone() { return timezone; }
     public void setTimezone(String timezone) { this.timezone = timezone; }
     public Instant getCreatedAt() { return createdAt; }
+    public String getCheckInCode() { return checkInCode; }
+    public void setCheckInCode(String checkInCode) { this.checkInCode = checkInCode; }
 }

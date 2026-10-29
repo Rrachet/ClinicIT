@@ -97,6 +97,29 @@ public class AppointmentService {
         return AppointmentResponse.from(saved, patient.getFullName());
     }
 
+    /**
+     * A patient who checked themselves in at the clinic: a walk-in for now that is already
+     * confirmed and arrived, ready for the queue. No staff member acts, so the history has
+     * no actor. The doctor said they are seeing patients by going live, so working hours are
+     * not checked here (docs/SELF_CHECK_IN.md).
+     */
+    public Appointment createSelfCheckIn(UUID clinicId, UUID patientId, UUID doctorId, UUID visitTypeId, String reason) {
+        Appointment appointment = new Appointment();
+        appointment.setClinicId(clinicId);
+        appointment.setPatientId(patientId);
+        appointment.setDoctorId(doctorId);
+        appointment.setScheduledAt(clinicTime.now(clinicId).truncatedTo(ChronoUnit.MINUTES));
+        appointment.setWalkIn(true);
+        appointment.setVisitTypeId(visitTypeId);
+        appointment.setReasonSummary(reason);
+        Appointment saved = repository.save(appointment);
+        var now = clinicTime.instant();
+        history.booked(saved, null, now);
+        apply(null, saved, AppointmentStatus.CONFIRMED);
+        apply(null, saved, AppointmentStatus.ARRIVED);
+        return saved;
+    }
+
     @Transactional(readOnly = true)
     public AppointmentResponse get(Actor actor, UUID id) {
         Appointment appointment = repository.findByIdAndClinicId(id, actor.clinicId())

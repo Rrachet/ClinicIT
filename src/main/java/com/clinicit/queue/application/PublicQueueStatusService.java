@@ -57,10 +57,10 @@ public class PublicQueueStatusService {
                         entry.getDoctorId(), entry.getQueueDate(), QueueStatus.WAITING, entry.getTokenNumber())
                 : 0;
 
+        var doctor = doctors.findByIdAndClinicId(entry.getDoctorId(), entry.getClinicId());
         return new PublicQueueStatusResponse(
                 clinics.findById(entry.getClinicId()).map(Clinic::getName).orElse(null),
-                doctors.findByIdAndClinicId(entry.getDoctorId(), entry.getClinicId())
-                        .map(DoctorProfile::getDisplayName).orElse(null),
+                doctor.map(DoctorProfile::getDisplayName).orElse(null),
                 entry.getQueueDate(),
                 entry.getTokenNumber(),
                 entry.getStatus(),
@@ -69,7 +69,8 @@ public class PublicQueueStatusService {
                 predictions.forEntry(entry)
                         .map(e -> new PublicQueueStatusResponse.EstimatedWait(
                                 e.estimatedWaitMinutes(), e.lowerBoundMinutes(), e.upperBoundMinutes()))
-                        .orElse(null)
+                        .orElse(null),
+                doctor.map(DoctorProfile::getRoom).orElse(null)
         );
     }
 }

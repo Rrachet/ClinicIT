@@ -35,6 +35,18 @@ All endpoints except `POST /api/v1/auth/login`, `GET /api/v1/health` and
 - POST /api/v1/appointments/{id}/no-show
 - POST /api/v1/appointments/{id}/reschedule   (booked or confirmed only; same doctor)
 
+## Self check-in
+
+See [SELF_CHECK_IN.md](SELF_CHECK_IN.md).
+
+- PUT  /api/v1/doctors/{id}/duty       (doctor: own; front desk: any) `{ live, room? }`: go live or offline
+- GET  /api/v1/visit-types             (staff)
+- POST /api/v1/visit-types             (admin) `{ name, description?, anyDoctor, doctorIds, sortOrder? }`
+- PUT  /api/v1/visit-types/{id}        (admin) same, plus `active`
+- GET  /api/v1/public/check-in/{code}  (public, rate limited) clinic name, `open`, visit types with `available`
+- POST /api/v1/public/check-in/{code}  (public, rate limited) `{ fullName, phone, visitTypeId, reason? }` →
+  `{ statusCode, tokenNumber, doctorName, room, alreadyCheckedIn }`; 409 `NO_DOCTOR_AVAILABLE`
+
 ## Doctor schedules (Phase 10)
 
 Scheduling rules and refusal codes: [SCHEDULING.md](SCHEDULING.md).

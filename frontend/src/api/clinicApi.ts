@@ -13,18 +13,29 @@ import type {
   MessagingSettings,
   Patient,
   PatientNotification,
+  PublicCheckIn,
   PublicQueueStatus,
   QueueAnalytics,
   QueueBoard,
   QueueEntry,
   Role,
+  SelfCheckInResult,
   TimeOff,
   Trends,
   User,
+  VisitType,
   WaitEstimates,
   WaitTimes,
   WorkingDay,
 } from "./types";
+
+export interface VisitTypeInput {
+  name: string;
+  description?: string;
+  anyDoctor: boolean;
+  doctorIds: string[];
+  sortOrder?: number;
+}
 
 /** Typed wrappers around every backend endpoint the UI uses. No logic beyond HTTP. */
 export function clinicApi(http: ApiClient) {
@@ -43,6 +54,13 @@ export function clinicApi(http: ApiClient) {
     doctors: () => http.get<Doctor[]>("/api/v1/doctors"),
     createDoctor: (body: { displayName: string; specialization?: string }) =>
       http.post<Doctor>("/api/v1/doctors", { body }),
+    /** Go live (seeing patients) or offline; room omitted keeps the current one. */
+    setDuty: (doctorId: string, body: { live: boolean; room?: string }) =>
+      http.put<Doctor>(`/api/v1/doctors/${id(doctorId)}/duty`, { body }),
+    visitTypes: () => http.get<VisitType[]>("/api/v1/visit-types"),
+    createVisitType: (body: VisitTypeInput) => http.post<VisitType>("/api/v1/visit-types", { body }),
+    updateVisitType: (visitTypeId: string, body: VisitTypeInput & { active: boolean }) =>
+      http.put<VisitType>(`/api/v1/visit-types/${id(visitTypeId)}`, { body }),
     users: () => http.get<User[]>("/api/v1/users"),
     createUser: (body: { email: string; fullName: string; password: string; role: Role; doctorProfileId?: string }) =>
       http.post<User>("/api/v1/users", { body }),
@@ -112,6 +130,10 @@ export function clinicApi(http: ApiClient) {
     noShowRisk: (date: string) => http.get<NoShowRisk[]>("/api/v1/no-show-risk", { query: { date } }),
     noShowRiskEvaluation: () => http.get<NoShowRiskEvaluation>("/api/v1/no-show-risk/evaluation"),
 
+    publicCheckIn: (code: string) =>
+      http.get<PublicCheckIn>(`/api/v1/public/check-in/${id(code)}`, { anonymous: true }),
+    selfCheckIn: (code: string, body: { fullName: string; phone: string; visitTypeId: string; reason?: string }) =>
+      http.post<SelfCheckInResult>(`/api/v1/public/check-in/${id(code)}`, { body, anonymous: true }),
     publicStatus: (code: string) =>
       http.get<PublicQueueStatus>(`/api/v1/public/queue-status/${id(code)}`, { anonymous: true }),
   };

@@ -35,7 +35,8 @@ public class ClinicService {
     public ClinicResponse current(Actor actor) {
         return clinics.findById(actor.clinicId())
                 .map(clinic -> new ClinicResponse(
-                        clinic.getId(), clinic.getName(), clinic.getTimezone(), clinicTime.today(clinic.getId())))
+                        clinic.getId(), clinic.getName(), clinic.getTimezone(), clinicTime.today(clinic.getId()),
+                        clinic.getCheckInCode()))
                 .orElseThrow(() -> new NotFoundException("Clinic not found"));
     }
 }

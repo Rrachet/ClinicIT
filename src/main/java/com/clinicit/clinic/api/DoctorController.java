@@ -9,6 +9,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/doctors")
@@ -31,5 +32,12 @@ public class DoctorController {
     @AnyStaff
     public List<DoctorResponse> list(Actor actor) {
         return service.list(actor);
+    }
+
+    /** Go live (seeing patients) or offline, and set the room. Doctors: only themselves. */
+    @PutMapping("/{id}/duty")
+    @AnyStaff
+    public DoctorResponse duty(Actor actor, @PathVariable UUID id, @Valid @RequestBody DutyRequest request) {
+        return service.setDuty(actor, id, request);
     }
 }
