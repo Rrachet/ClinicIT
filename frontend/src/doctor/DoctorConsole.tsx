@@ -13,6 +13,7 @@ import { FullPageSpinner } from "@/ui/Spinner";
 import { StatusBadge } from "@/ui/StatusBadge";
 import { useAsync } from "@/ui/useAsync";
 import { statusLabel, timeOf } from "@/ui/format";
+import { DutyPanel } from "./DutyPanel";
 
 /** The doctor's own queue: who is in the room, who is next, and one obvious next step. */
 export function DoctorConsole() {
@@ -82,6 +83,7 @@ export function DoctorConsole() {
       <AppHeader title="My Queue" clinicName={clinic.name} day={clinic.today} feed={live.feedStatus} />
       <main className="page doctor-grid">
         <ErrorBanner error={error} onDismiss={() => setError(null)} />
+        <DutyPanel api={api} doctorId={doctorId} />
 
         <section className="panel current-panel" aria-labelledby="current-title">
           <h2 id="current-title">Current patient</h2>

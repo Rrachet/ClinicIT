@@ -18,6 +18,7 @@ const FEED_TEXT: Record<FeedStatus, string> = {
 const ADMIN_LINKS = [
   { href: "/reception", label: "Reception" },
   { href: "/admin", label: "Analytics" },
+  { href: "/admin/check-in", label: "Check-in" },
   { href: "/admin/schedules", label: "Schedules" },
   { href: "/admin/team", label: "Team" },
 ];

@@ -34,6 +34,13 @@ and today's queue with patients in every state.
 
 ## What it does
 
+- **Self check-in, no receptionist needed:**
+  - patients scan the clinic's QR code, enter their name and phone, and pick a visit type;
+  - ClinicIT queues them with the least busy live doctor who sees that visit type;
+  - their phone shows the wait, then "It's your turn, go to Room 3".
+
+  See [docs/SELF_CHECK_IN.md](docs/SELF_CHECK_IN.md).
+
 - **Reception**:
   - register and find patients;
   - book a free slot, or check in a walk-in in one click;
@@ -149,7 +156,7 @@ Guides:
 | | |
 |---|---|
 | [Product spec](docs/PRODUCT_SPEC.md), [Architecture](docs/ARCHITECTURE.md), [Data model](docs/DATA_MODEL.md), [API](docs/API.md) | what it is and how it fits together |
-| [Queue engine](docs/QUEUE_ENGINE.md), [Scheduling](docs/SCHEDULING.md) | the core rules, locking and the time model |
+| [Self check-in](docs/SELF_CHECK_IN.md), [Queue engine](docs/QUEUE_ENGINE.md), [Scheduling](docs/SCHEDULING.md) | QR check-in and doctor matching, the core rules, locking and the time model |
 | [Security](docs/SECURITY.md) | sessions, roles, clinic isolation, the public status page |
 | [Real-time](docs/REALTIME.md), [Notifications](docs/NOTIFICATIONS.md) | live updates and patient messages |
 | [Analytics](docs/ANALYTICS.md), [AI: wait times](docs/AI.md), [No-show risk](docs/NO_SHOW_RISK.md) | figures and advisory estimates, with their definitions and limits |
@@ -159,9 +166,12 @@ Guides:
 
 ## Deployment status
 
-The Vercel frontend preview is available at https://clinic-it-kappa.vercel.app, but it is **not yet a complete hosted clinic system**: a public Spring Boot API and production database are not connected. Sign-in and API-backed workflows should be evaluated using the local Docker Compose stack above until the backend is deployed and the frontend API URL is configured. Do not enter real patient data into the preview.
+Live on free tiers:
+- **Web app:** https://clinic-it-kappa.vercel.app (Vercel);
+- **API:** https://clinic-it-api.vercel.app (Vercel container runtime);
+- **Database:** Supabase PostgreSQL.
 
-The deployment checklist and environment requirements are documented in [Deployment](docs/DEPLOYMENT.md). Production readiness also depends on completing the roadmap items below, including a real messaging provider and a multi-instance realtime strategy.
+See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Patient text messages are off until an SMS provider is set up. Vercel's free plan is for non-commercial use.
 
 ## What's built
 

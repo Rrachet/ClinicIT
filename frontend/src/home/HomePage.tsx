@@ -3,87 +3,86 @@ import { HomeActions } from "./HomeActions";
 
 const PATIENT_STEPS = [
   {
-    title: "Book or walk in",
-    who: "Reception",
-    text: "Book a free slot from the doctor's real hours, or check a walk-in straight into the queue with one click.",
-  },
-  {
-    title: "Arrive and check in",
-    who: "Reception",
-    text: "Mark the patient as arrived. The appointment, the queue and the day's counts stay in step.",
-  },
-  {
-    title: "Get a token",
-    who: "Patient",
-    text: "Each patient gets the next token for the day and a private status link. No app, no account.",
-  },
-  {
-    title: "Wait anywhere",
-    who: "Patient",
-    text: "The status page shows the token being served, how many are ahead and a wait range, and updates by itself.",
-  },
-  {
-    title: "Called, live",
-    who: "Reception or doctor",
-    text: "Calling the next patient updates the doctor's screen, the desk and the patient's phone together.",
-  },
-  {
-    title: "Consult and close",
+    title: "Doctor goes live",
     who: "Doctor",
-    text: "Start and complete the consultation. Every step is recorded for the day's figures.",
+    text: "The doctor signs in, sets their room and taps “Go live”. From then on, patients can be sent to them.",
+  },
+  {
+    title: "Patient scans the QR code",
+    who: "Patient",
+    text: "A poster in the waiting area opens the clinic's check-in page on the patient's phone. No app, no account.",
+  },
+  {
+    title: "Name, number, visit type",
+    who: "Patient",
+    text: "They enter their name and phone number, choose what they are here for (say, Child or Skin), and can add a note for the doctor.",
+  },
+  {
+    title: "Matched and queued",
+    who: "ClinicIT",
+    text: "ClinicIT picks a live doctor who sees that visit type, the one with the shortest queue, and gives the patient a token.",
+  },
+  {
+    title: "Wait with a live ETA",
+    who: "Patient",
+    text: "Their page shows the token being served, how many are ahead and an estimated wait, and updates by itself.",
+  },
+  {
+    title: "“Go to Room 3”",
+    who: "Doctor",
+    text: "The doctor taps “Call next”. The patient's phone shows the room in large type, and can beep and vibrate.",
   },
 ] as const;
 
 const ROLES = [
   {
-    role: "Reception",
+    role: "Patients",
     points: [
-      "Find or register patients in seconds",
-      "Book slots, walk-ins, reschedules and cancellations",
-      "Every doctor's queue on one live screen",
-      "Call, skip, requeue or record a no-show",
+      "Scan, type a name and number, pick a visit: done",
+      "Their token, the token being served and a wait range",
+      "“It's your turn, go to Room 3”, without refreshing",
     ],
   },
   {
     role: "Doctors",
     points: [
-      "The current patient, the reason for the visit, who is next",
+      "“Go live” when ready, “Go offline” when done",
+      "The current patient, their note, and who is next",
       "Call next, start and complete in one click each",
-      "Only their own queue, always current",
-    ],
-  },
-  {
-    role: "Patients",
-    points: [
-      "A private link on their phone: no app, no sign-up",
-      "Their token, the token being served and a wait range",
-      "“You’re next” and “It’s your turn” without refreshing",
     ],
   },
   {
     role: "Clinic admins",
     points: [
-      "Staff logins and roles, the clinic's name",
-      "Doctors' weekly hours, breaks, appointment length and leave",
-      "Waits, completions, no-shows, doctor workload and trends",
+      "Print the check-in QR poster",
+      "Set visit types and which doctors see each",
+      "Watch every queue and fix anything by hand",
+    ],
+  },
+  {
+    role: "Front desk (optional)",
+    points: [
+      "Not needed for check-in",
+      "Can still book ahead, add walk-ins without a phone",
+      "Skip, requeue, no-show and cancel",
     ],
   },
 ] as const;
 
 const FEATURES = [
-  { title: "Live token queue", text: "Tokens are allocated atomically, and one patient is with a doctor at a time. Every screen stays in sync." },
-  { title: "Real schedules", text: "Bookings respect each doctor's hours, breaks and leave. Walk-ins never take a booked slot." },
+  { title: "QR self check-in", text: "Patients check themselves in from their own phone. Repeat scans return the same place, never a second token." },
+  { title: "Fair doctor matching", text: "By the visit type the patient picks and the shortest live queue. Nothing is guessed from what they wrote." },
+  { title: "Live token queue", text: "Tokens are allocated atomically, one patient is with a doctor at a time, and every screen stays in sync." },
   { title: "Wait estimates", text: "An approximate range from the live queue and the clinic's own history. Always a range, never a promise." },
-  { title: "No-show reminders", text: "An advisory flag suggests a reminder call, based only on the patient's own attendance. It never blocks care." },
   { title: "Clinic figures", text: "Average and median wait, consultations, no-show rate, hourly queue and doctor workload, from recorded history." },
-  { title: "Secure by default", text: "Role-based access, server-side sessions, every query scoped to your clinic, and nothing sensitive in logs." },
+  { title: "Secure by default", text: "Staff sign-in with roles, every query scoped to your clinic, rate limits on public pages, nothing sensitive in logs." },
 ] as const;
 
 const REQUEST_FLOW = [
-  { label: "Reception clicks “Call #24”", detail: "Signed-in staff only" },
+  { label: "Doctor taps “Call next”", detail: "Signed-in doctor, own queue only" },
   { label: "One database transaction", detail: "Queue, appointment and history change together, or not at all" },
   { label: "Change recorded, then announced", detail: "Only committed changes are ever sent" },
-  { label: "Every screen updates", detail: "Doctor and desk live over WebSocket; the patient's page on its next check" },
+  { label: "Every screen updates", detail: "Staff screens live over WebSocket; the patient's phone within seconds" },
 ] as const;
 
 const DELIVERY = [
@@ -113,20 +112,20 @@ export function HomePage() {
       <main>
         <section className="home-hero" aria-labelledby="home-title">
           <div className="home-hero-copy">
-            <p className="home-eyebrow">Queue and appointment management for outpatient clinics</p>
-            <h1 id="home-title">Run the clinic day without a crowd at the desk.</h1>
+            <p className="home-eyebrow">Self check-in and live queues for outpatient clinics</p>
+            <h1 id="home-title">Run the clinic day without a reception desk.</h1>
             <p className="home-lead">
-              Book appointments and walk-ins, run a live token queue for reception and doctors, and let patients follow
-              their turn on their own phone.
+              Patients scan a QR code, check themselves in and are matched to a doctor who is ready. Their phone shows
+              their place, the wait and which room to go to.
             </p>
             <HomeActions />
-            <p className="muted small">Patients: open the link the clinic sent you. No account is needed.</p>
+            <p className="muted small">Patients: scan the QR code in the clinic. No app or account is needed.</p>
           </div>
 
           <div className="home-hero-visual" aria-hidden="true">
             <div className="home-mock home-mock-desk">
               <div className="home-mock-head">
-                <span>Dr. Sharma</span>
+                <span>Dr. Sharma · Room 3</span>
                 <span className="home-mock-live">
                   <span className="live-dot" /> Live
                 </span>
@@ -142,26 +141,26 @@ export function HomePage() {
                   <span className="muted small">3 waiting</span>
                 </div>
               </div>
-              <span className="home-mock-button">Call #25</span>
+              <span className="home-mock-button">Call next</span>
             </div>
             <div className="home-mock home-mock-phone">
               <span className="label">Your token</span>
               <span className="token token-xl">#27</span>
               <strong>2 patients ahead of you</strong>
               <span className="muted small">Estimated wait 10–20 min</span>
-              <span className="muted small">Updates automatically</span>
+              <span className="muted small">You&apos;ll be told which room to go to</span>
             </div>
           </div>
         </section>
 
         <section className="home-strip" aria-label="At a glance">
           <div>
-            <strong>Live</strong>
-            <span>Staff screens update within about a second</span>
+            <strong>No receptionist</strong>
+            <span>Patients check themselves in by QR code</span>
           </div>
           <div>
             <strong>No app</strong>
-            <span>Patients use a private web link</span>
+            <span>Everything works in the phone&apos;s browser</span>
           </div>
           <div>
             <strong>Your clinic only</strong>
@@ -175,7 +174,7 @@ export function HomePage() {
 
         <section id="how-it-works" className="home-section" aria-labelledby="how-title">
           <h2 id="how-title" className="home-h2">How a patient moves through the clinic</h2>
-          <p className="home-sub">Six steps, from the first contact to the end of the consultation.</p>
+          <p className="home-sub">Six steps from the waiting-room door to the doctor&apos;s room, with nobody at a desk.</p>
           <ol className="home-steps">
             {PATIENT_STEPS.map((step, i) => (
               <li key={step.title} className="home-step">
@@ -192,7 +191,7 @@ export function HomePage() {
 
         <section className="home-section home-section-alt" aria-labelledby="flow-title">
           <h2 id="flow-title" className="home-h2">One click, every screen</h2>
-          <p className="home-sub">What happens when the desk calls the next patient.</p>
+          <p className="home-sub">What happens when the doctor calls the next patient.</p>
           <ol className="home-flow">
             {REQUEST_FLOW.map((stage) => (
               <li key={stage.label}>
@@ -267,22 +266,23 @@ export function HomePage() {
         <section className="home-section home-section-alt" aria-labelledby="responsible-title">
           <h2 id="responsible-title" className="home-h2">Operational, not clinical</h2>
           <p className="home-sub home-narrow">
-            ClinicIT organises the day: appointments, the queue and the figures. It never diagnoses, prescribes,
-            reorders patients by condition or refuses care. Wait estimates and the no-show flag are advisory and are
-            labelled that way wherever they appear.
+            ClinicIT organises the day: check-in, the queue and the figures. It never diagnoses, prescribes,
+            reorders patients by condition or refuses care. The doctor is chosen from the visit type the patient picks,
+            never from what they write about their health. Self check-in is not for emergencies, and the page says so.
+            Wait estimates are advisory and labelled that way.
           </p>
         </section>
 
         <section className="home-cta" aria-labelledby="cta-title">
           <h2 id="cta-title">Ready for today&apos;s patients?</h2>
-          <p>Staff sign in with the account their clinic admin created.</p>
+          <p>Doctors and admins sign in with the account their clinic admin created.</p>
           <HomeActions />
         </section>
       </main>
 
       <footer className="home-footer">
         <span className="brand">ClinicIT</span>
-        <span className="muted small">Patients: use the private link from your clinic to follow your place in the queue.</span>
+        <span className="muted small">Patients: scan the check-in QR code in your clinic to join the queue.</span>
       </footer>
     </div>
   );

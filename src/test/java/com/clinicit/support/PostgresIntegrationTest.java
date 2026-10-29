@@ -100,6 +100,7 @@ public abstract class PostgresIntegrationTest {
 
     @Autowired protected WaitTimePredictionService waitTimePredictions;
     @Autowired protected PublicStatusRateLimiter publicStatusRateLimiter;
+    @Autowired protected com.clinicit.checkin.api.CheckInRateLimiter checkInRateLimiter;
 
     @BeforeEach
     void resetDatabase() {
@@ -107,6 +108,7 @@ public abstract class PostgresIntegrationTest {
         FakeModelServer.get().respond(body -> FakeModelServer.Reply.error(503));
         waitTimePredictions.reset();
         publicStatusRateLimiter.reset();
+        checkInRateLimiter.reset();
         jdbc.execute("""
                 truncate table operational_events, notifications, queue_events, login_throttle, auth_sessions, users, queue_token_counters, queue_entries,
                                appointments, patients, doctor_profiles, clinics cascade

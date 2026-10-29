@@ -37,6 +37,10 @@ public class Appointment {
     @Column(name = "reason_summary", length = 500)
     private String reasonSummary;
 
+    /** The visit type a patient chose at self check-in; null for desk bookings. */
+    @Column(name = "visit_type_id", updatable = false)
+    private UUID visitTypeId;
+
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -78,6 +82,8 @@ public class Appointment {
 
     public String getReasonSummary() { return reasonSummary; }
     public void setReasonSummary(String reasonSummary) { this.reasonSummary = reasonSummary; }
+    public UUID getVisitTypeId() { return visitTypeId; }
+    public void setVisitTypeId(UUID visitTypeId) { this.visitTypeId = visitTypeId; }
     public Instant getCreatedAt() { return createdAt; }
     public Instant getUpdatedAt() { return updatedAt; }
 }

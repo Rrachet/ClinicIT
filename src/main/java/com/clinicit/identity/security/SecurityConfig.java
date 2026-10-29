@@ -58,6 +58,9 @@ public class SecurityConfig implements WebMvcConfigurer {
                         .requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
                         // Patient status by unguessable code; read-only, no patient data.
                         .requestMatchers(HttpMethod.GET, "/api/v1/public/queue-status/*").permitAll()
+                        // Self check-in from the clinic's QR code (docs/SELF_CHECK_IN.md); rate limited.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/public/check-in/*").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/public/check-in/*").permitAll()
                         .requestMatchers("/error").permitAll()
                         // Probes and metrics. Actuator is served only on the internal management
                         // port (management.server.port); on the public port these paths have no
