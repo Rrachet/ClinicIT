@@ -18,7 +18,7 @@ docker compose up --build --detach --wait --wait-timeout 300
 echo "API readiness (inside the compose network)"
 docker compose exec -T api bash -c \
   "exec 3<>/dev/tcp/127.0.0.1/8081 && printf 'GET /actuator/health/readiness HTTP/1.0\r\n\r\n' >&3 && cat <&3" \
-  | grep -q '"UP"'
+  | grep -q '^HTTP/1.[01] 200'
 
 echo "Admin login"
 login=$(curl -fsS http://127.0.0.1:8080/api/v1/auth/login -H 'Content-Type: application/json' \
